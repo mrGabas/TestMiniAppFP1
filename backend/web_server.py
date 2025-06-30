@@ -3,33 +3,49 @@ import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 
-# Добавляем корневую папку в путь, чтобы можно было импортировать db_handler
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import db_handler
+# Этот блок добавляет корневую папку в пути для импорта
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.append(project_root)
 
-# Создаем веб-приложение
-app = Flask(__name__)
-# Разрешаем запросы с любого адреса (важно для связки с фронтендом)
-CORS(app)
+# --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+# Импортируем функцию с ПРАВИЛЬНЫМ названием
+from db_handler import get_all_rentals_as_dicts
 
-# --- Создаем наш первый "адрес" (API endpoint) ---
-@app.route('/api/status')
-def get_status():
-    """Простой тестовый эндпоинт, чтобы проверить, что сервер работает."""
-    return jsonify({"status": "ok", "message": "Сервер работает!"})
+# Инициализируем Flask-приложение
+app = Flask(__name__, static_folder='../frontend', static_url_path='')
+
+# Разрешаем CORS-запросы
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
+@app.route('/')
+def index():
+    """Отдает главную страницу приложения index.html."""
+    return app.send_static_file('index.html')
+
+
+@app.route('/<path:path>')
+def static_proxy(path):
+    """Отдает остальные статические файлы (css, js, картинки)."""
+    return app.send_static_file(path)
+
 
 @app.route('/api/games')
-def get_games():
-    """Отдает список всех игр."""
+def api_get_games():
+    """
+    Вызывает функцию для получения реальных игр из БД,
+    теперь с правильным именем функции.
+    """
     try:
-        games_data = db_handler.db_query("SELECT id, name FROM games ORDER BY name", fetch="all")
-        # Преобразуем данные в удобный формат
-        games_list = [{"id": g[0], "name": g[1]} for g in games_data]
-        return jsonify(games_list)
+        # --- И ИСПОЛЬЗУЕМ ЕЕ ЗДЕСЬ ---
+        games = get_all_rentals_as_dicts()
+        return jsonify(games)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Обработка ошибок, если что-то пойдет не так с базой данных
+        print(f"Ошибка при получении игр из БД: {e}")
+        return jsonify({"error": "Не удалось получить игры из базы данных"}), 500
+
 
 if __name__ == '__main__':
-    # Запускаем наш веб-сервер для теста
-    # host='0.0.0.0' делает его доступным извне виртуальной машины
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,40 +1,48 @@
-// Ждем, когда приложение будет готово
-document.addEventListener('DOMContentLoaded', function() {
-    const statusDiv = document.getElementById('status');
-    const gamesListUl = document.getElementById('games-list');
+// Ждем, пока вся страница (DOM) будет готова к работе
+document.addEventListener('DOMContentLoaded', () => {
+    // Находим ключевые элементы на странице по их настоящим ID
+    const gamesList = document.getElementById('games-list');
+    const statusDiv = document.getElementById('status'); // ИСПРАВЛЕНО: используем 'status'
 
-    // Адрес нашего бэкенда. Пока что для теста он будет локальным.
-    const API_BASE_URL = 'http://127.0.0.1:5000';
+    // Устанавливаем начальный статус
+    statusDiv.textContent = 'Подключение к серверу...';
 
-    // 1. Проверяем статус сервера
-    fetch(`${API_BASE_URL}/api/status`)
-        .then(response => response.json())
-        .then(data => {
-            statusDiv.textContent = `Статус сервера: ${data.message}`;
-            statusDiv.style.backgroundColor = '#d4edda'; // Зеленый фон
-        })
-        .catch(error => {
-            statusDiv.textContent = 'Ошибка: Не удалось подключиться к серверу.';
-            statusDiv.style.backgroundColor = '#f8d7da'; // Красный фон
-            console.error('Ошибка подключения к API:', error);
-        });
-
-    // 2. Загружаем список игр
-    fetch(`${API_BASE_URL}/api/games`)
-        .then(response => response.json())
-        .then(data => {
-            gamesListUl.innerHTML = ''; // Очищаем список
-            if (data.error) {
-                throw new Error(data.error);
+    // Пытаемся получить данные с сервера
+    fetch('/api/games')
+        .then(response => {
+            if (!response.ok) {
+                // Если от сервера пришла ошибка, генерируем свою
+                throw new Error('Сервер ответил с ошибкой');
             }
-            data.forEach(game => {
-                const li = document.createElement('li');
-                li.textContent = `[ID: ${game.id}] - ${game.name}`;
-                gamesListUl.appendChild(li);
-            });
+            return response.json(); // Преобразуем ответ в JSON
+        })
+        .then(games => {
+            // УСПЕХ! Мы получили данные.
+            // Убираем статусное сообщение
+            statusDiv.textContent = 'Подключение успешно!';
+            // Можно и вовсе его спрятать:
+            // statusDiv.style.display = 'none';
+
+            // Очищаем старый список
+            gamesList.innerHTML = '';
+
+            // Заполняем список играми
+            if (games.length === 0) {
+                gamesList.textContent = 'Игр для отображения нет.';
+            } else {
+                games.forEach(game => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = `[ID: ${game.id}] - ${game.name}`;
+                    gamesList.appendChild(listItem);
+                });
+            }
         })
         .catch(error => {
-            gamesListUl.innerHTML = '<li>Не удалось загрузить список игр.</li>';
-            console.error('Ошибка загрузки игр:', error);
+            // ОШИБКА! Не смогли получить данные.
+            console.error('Ошибка при загрузке игр:', error);
+            // Показываем финальное сообщение об ошибке в правильном элементе
+            statusDiv.textContent = 'Ошибка: Не удалось подключиться к серверу.';
+            // Очищаем список игр
+            gamesList.innerHTML = '';
         });
 });
