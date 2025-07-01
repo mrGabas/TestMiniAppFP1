@@ -2,14 +2,13 @@
 import sqlite3
 import logging
 from datetime import datetime
-import pytz  # <-- Импортируем библиотеку для работы с часовыми поясами
+import pytz
 from datetime import timedelta
 import uuid
 import csv
 from config import DB_FILE
 from database import db_query, init_database
 
-# Устанавливаем часовой пояс, который будет использоваться во всем проекте
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
 
@@ -21,6 +20,21 @@ def _check_column_exists(cursor, table_name, column_name):
 def initialize_and_update_db():
     logging.info("Проверка и инициализация базы данных...")
     init_database()
+
+    # --- ИСПРАВЛЕННЫЙ БЛОК СОЗДАНИЯ ДАННЫХ ---
+    # Добавляем игру
+    db_query("INSERT OR IGNORE INTO games (id, name) VALUES (5, 'Among us')")
+    # Добавляем тестовый аккаунт для этой игры
+    db_query("INSERT OR IGNORE INTO accounts (id, login, password, game_id) VALUES (101, 'test_login', 'test_pass', 5)")
+    # Создаем тестовую аренду, связанную с этим аккаунтом
+    db_query("""
+             INSERT
+             OR IGNORE INTO rentals (id, client_name, account_id, start_time, end_time)
+        VALUES ('test-rental-123', 'Тестовый Клиент', 101, ?, ?)
+             """,
+             params=(datetime.now(MOSCOW_TZ).isoformat(), (datetime.now(MOSCOW_TZ) + timedelta(hours=1)).isoformat()))
+    # --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
+
     try:
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
@@ -37,14 +51,15 @@ def initialize_and_update_db():
         raise
 
 
-# <<< ИЗМЕНЕНИЕ: Все операции со временем теперь используют MOSCOW_TZ >>>
+# ... (весь остальной ваш код остается без изменений) ...
+# (весь остальной ваш код остается без изменений) ...
+
 def create_rental_from_gui(client_name, account_id, total_minutes, info):
     try:
-        start_time = datetime.now(MOSCOW_TZ)  # <-- Используем МСК
+        start_time = datetime.now(MOSCOW_TZ)
         end_time = start_time + timedelta(minutes=total_minutes)
-        remind_time = end_time - timedelta(minutes=10)  # <-- Напоминание за 10 минут
+        remind_time = end_time - timedelta(minutes=10)
         rental_id = str(uuid.uuid4())
-
         db_query(
             "INSERT INTO rentals (id, client_name, account_id, start_time, end_time, remind_time, initial_minutes, info) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (rental_id, client_name, account_id, start_time.isoformat(), end_time.isoformat(), remind_time.isoformat(),
@@ -61,7 +76,14 @@ def move_rental_to_history(rental_id):
         rental_info = db_query("SELECT account_id FROM rentals WHERE id = ?", (rental_id,), fetch="one")
         if rental_info and rental_info[0]:
             db_query("UPDATE accounts SET rented_by = NULL WHERE id = ?", (rental_info[0],))
-        db_query("UPDATE rentals SET is_history = 1 WHERE id = ?", (rental_id,))
+        # ВАЖНО: Мы должны проверять существование колонки is_history перед обновлением
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            if _check_column_exists(cursor, "rentals", "is_history"):
+                cursor.execute("UPDATE rentals SET is_history = 1 WHERE id = ?", (rental_id,))
+            else:  # Если колонки нет, можно ее создать или просто пропустить
+                logging.warning("Колонка 'is_history' не найдена в таблице rentals. Пропускаем обновление.")
+            conn.commit()
         return True
     except Exception as e:
         logging.error(f"Ошибка перемещения аренды {rental_id} в историю: {e}")
@@ -72,12 +94,10 @@ def extend_rental_from_gui(rental_id, minutes_to_add):
     try:
         res = db_query("SELECT end_time, initial_minutes FROM rentals WHERE id = ?", (rental_id,), fetch="one")
         if not res: return False
-
         current_end_time = datetime.fromisoformat(res[0])
         new_end = current_end_time + timedelta(minutes=minutes_to_add)
         new_remind = new_end - timedelta(minutes=5)
         new_initial_minutes = (res[1] or 0) + minutes_to_add
-
         db_query(
             "UPDATE rentals SET end_time = ?, remind_time = ?, reminded = 0, pre_reminded = 0, initial_minutes = ? WHERE id = ?",
             (new_end.isoformat(), new_remind.isoformat(), new_initial_minutes, rental_id))
@@ -134,9 +154,21 @@ def import_accounts_from_csv(file_path):
 
 
 def get_user_rental_info(username):
-    return db_query(
-        "SELECT end_time FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
-        (username,), fetch="one")
+    # Убедимся, что колонка is_history существует перед запросом
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            if _check_column_exists(cursor, "rentals", "is_history"):
+                return db_query(
+                    "SELECT end_time FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
+                    (username,), fetch="one")
+            else:
+                return db_query(
+                    "SELECT end_time FROM rentals WHERE client_name = ? ORDER BY end_time DESC LIMIT 1",
+                    (username,), fetch="one")
+    except Exception as e:
+        logging.error(f"Ошибка получения информации об аренде для пользователя {username}: {e}")
+        return None
 
 
 def get_games_stats():
@@ -154,7 +186,7 @@ def rent_account(game_name, client_name, minutes, chat_id):
         (game_id,), fetch="one")
     if not free_account: return None
     acc_id, login, password = free_account
-    now = datetime.now(MOSCOW_TZ)  # <-- Используем МСК
+    now = datetime.now(MOSCOW_TZ)
     end_time = now + timedelta(minutes=minutes)
     remind_time = end_time - timedelta(minutes=10)
     rental_id = str(uuid.uuid4())
@@ -167,7 +199,12 @@ def rent_account(game_name, client_name, minutes, chat_id):
 
 
 def check_and_process_expired_rentals():
-    now_iso = datetime.now(MOSCOW_TZ).isoformat()  # <-- Используем МСК
+    now_iso = datetime.now(MOSCOW_TZ).isoformat()
+    # Проверяем наличие колонки is_history
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        if not _check_column_exists(cursor, "rentals", "is_history"):
+            return set()  # Если колонки нет, выходим
     expired_rentals = db_query("SELECT id, account_id FROM rentals WHERE end_time <= ? AND is_history = 0", (now_iso,),
                                fetch="all")
     if not expired_rentals: return set()
@@ -182,7 +219,13 @@ def check_and_process_expired_rentals():
 
 
 def get_rentals_for_reminder():
-    now_iso = datetime.now(MOSCOW_TZ).isoformat()  # <-- Используем МСК
+    now_iso = datetime.now(MOSCOW_TZ).isoformat()
+    # Проверяем наличие колонки is_history и pre_reminded
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        if not _check_column_exists(cursor, "rentals", "is_history") or not _check_column_exists(cursor, "rentals",
+                                                                                                 "pre_reminded"):
+            return []
     return db_query(
         "SELECT id, client_name, funpay_chat_id FROM rentals WHERE remind_time <= ? AND is_history = 0 AND pre_reminded = 0",
         (now_iso,), fetch="all")
@@ -198,6 +241,11 @@ def get_all_game_names():
 
 
 def extend_user_rental(username, hours_to_add):
+    # Проверяем наличие колонки is_history
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        if not _check_column_exists(cursor, "rentals", "is_history"):
+            return None
     rental = db_query(
         "SELECT id, end_time, initial_minutes FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
         (username,), fetch="one")
