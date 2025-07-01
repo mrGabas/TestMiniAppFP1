@@ -3,20 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель управления ботом</title>
+    <title>Панель управления</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>Панель управления</h1>
-        <div id="status">Загрузка...</div>
-        <hr>
-        <h2>Список игр</h2>
-        <ul id="games-list">
-            </ul>
+        <div id="connection-status">Подключение...</div>
+
+        <div class="controls">
+            <button id="show-games-btn">Показать игры</button>
+            <button id="show-rentals-btn">Показать аренды</button>
+        </div>
+
+        <div id="games-list-container" class="data-container">
+            <h2>Список игр</h2>
+            <div id="games-list" class="list"></div>
+        </div>
+
+        <div id="rentals-list-container" class="data-container" style="display: none;">
+            <h2>Список аренд</h2>
+            <div id="rentals-list" class="list"></div>
+        </div>
     </div>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
