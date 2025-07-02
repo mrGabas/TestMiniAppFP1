@@ -21,20 +21,6 @@ def initialize_and_update_db():
     logging.info("Проверка и инициализация базы данных...")
     init_database()
 
-    # --- ИСПРАВЛЕННЫЙ БЛОК СОЗДАНИЯ ДАННЫХ ---
-    # Добавляем игру
-    db_query("INSERT OR IGNORE INTO games (id, name) VALUES (5, 'Among us')")
-    # Добавляем тестовый аккаунт для этой игры
-    db_query("INSERT OR IGNORE INTO accounts (id, login, password, game_id) VALUES (101, 'test_login', 'test_pass', 5)")
-    # Создаем тестовую аренду, связанную с этим аккаунтом
-    db_query("""
-             INSERT
-             OR IGNORE INTO rentals (id, client_name, account_id, start_time, end_time)
-        VALUES ('test-rental-123', 'Тестовый Клиент', 101, ?, ?)
-             """,
-             params=(datetime.now(MOSCOW_TZ).isoformat(), (datetime.now(MOSCOW_TZ) + timedelta(hours=1)).isoformat()))
-    # --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
-
     try:
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()

@@ -6,7 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="363783dd-bb7d-46d5-9002-e413884b51a9" name="Changes" comment="v 2">
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/web_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/web_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/db_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/db_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/script.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/script.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/rentals.db" beforeDir="false" afterPath="$PROJECT_DIR$/rentals.db" afterDir="false" />
     </list>
@@ -80,6 +84,8 @@
       <workItem from="1751311250640" duration="890000" />
       <workItem from="1751313249206" duration="6312000" />
       <workItem from="1751392902229" duration="2700000" />
+      <workItem from="1751401949253" duration="3337000" />
+      <workItem from="1751419289048" duration="980000" />
     </task>
     <task id="LOCAL-00001" summary="v 1">
       <option name="closed" value="true" />

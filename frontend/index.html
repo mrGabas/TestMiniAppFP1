@@ -2,56 +2,83 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Панель управления</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div class="container">
+    <div id="app-loading" style="text-align: center; padding-top: 50px; color: #888;">Загрузка...</div>
+
+    <div class="container" id="app-container" style="display: none;">
         <h1>Панель управления</h1>
-        <div id="connection-status">Подключение...</div>
-        
+
         <div class="controls">
             <button id="show-active-rentals-btn">Активные</button>
             <button id="show-history-rentals-btn">История</button>
-            <button id="show-games-btn">Игры</button>
             <button id="show-manual-rental-btn">Ручная аренда</button>
+            <button id="show-management-btn">Управление</button>
         </div>
 
         <div id="rentals-list-container" class="data-container">
-            <h2 id="rentals-title">Активные аренды</h2>
+            <h2 id="rentals-title"></h2>
             <div id="rentals-list" class="list"></div>
         </div>
+        <div id="manual-rental-container" class="data-container">
+             </div>
 
-        <div id="games-list-container" class="data-container" style="display: none;">
-            <h2>Список игр</h2>
-            <div id="games-list" class="list"></div>
-        </div>
+        <div id="management-container" class="data-container" style="display: none;">
+            <h2>Управление</h2>
 
-        <div id="manual-rental-container" class="data-container" style="display: none;">
-            <h2>Создать аренду вручную</h2>
-            <form id="manual-rental-form">
+            <div class="management-section">
+                <h3>Добавить новую игру</h3>
+                <form id="add-game-form">
+                    <div class="form-group">
+                        <label for="new-game-name">Название игры:</label>
+                        <input type="text" id="new-game-name" placeholder="Например, Elden Ring" required>
+                    </div>
+                    <button type="submit">Добавить игру</button>
+                </form>
+            </div>
+
+            <div class="management-section">
+                <h3>Добавить новый аккаунт</h3>
+                <form id="add-account-form">
+                    <div class="form-group">
+                        <label for="new-account-game">Игра:</label>
+                        <select id="new-account-game" required>
+                            <option value="">-- Сначала добавьте игры --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-account-login">Логин:</label>
+                        <input type="text" id="new-account-login" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-account-password">Пароль:</label>
+                        <input type="text" id="new-account-password" required>
+                    </div>
+                    <button type="submit">Добавить аккаунт</button>
+                </form>
+            </div>
+
+            <div class="management-section">
+                <h3>Редактировать лоты (FunPay Offer IDs)</h3>
                 <div class="form-group">
-                    <label for="client-name">Имя клиента:</label>
-                    <input type="text" id="client-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="account-select">Аккаунт:</label>
-                    <select id="account-select" required>
-                        <option value="">Загрузка свободных аккаунтов...</option>
+                    <label for="edit-offers-game">Выберите игру:</label>
+                    <select id="edit-offers-game">
+                        <option value="">-- Выберите игру --</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="rental-duration">Длительность (минут):</label>
-                    <input type="number" id="rental-duration" value="60" required>
+                    <label for="game-offers">ID лотов (через запятую):</label>
+                    <textarea id="game-offers" rows="3" placeholder="Например, 12345,67890"></textarea>
                 </div>
-                <button type="submit">Создать аренду</button>
-            </form>
+                <button id="save-offers-btn">Сохранить лоты</button>
+            </div>
         </div>
-
     </div>
-    
-    <script src="script.js"></script>
+
+    <script src="script.js" defer></script>
 </body>
 </html>
