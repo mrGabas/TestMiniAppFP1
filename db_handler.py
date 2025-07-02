@@ -1,4 +1,3 @@
-# db_handler.py
 import sqlite3
 import logging
 from datetime import datetime
@@ -6,9 +5,17 @@ import pytz
 from datetime import timedelta
 import uuid
 import csv
-from config import DB_FILE
-from database import db_query, init_database
 
+# --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+# УДАЛЯЕМ импорт неправильного пути из config.py
+# from config import DB_FILE 
+
+# ДОБАВЛЯЕМ импорт правильного, абсолютного пути из database.py
+from database import db_query, init_database, DB_FILE
+# -----------------------------
+
+
+# Устанавливаем часовой пояс
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
 
@@ -20,8 +27,8 @@ def _check_column_exists(cursor, table_name, column_name):
 def initialize_and_update_db():
     logging.info("Проверка и инициализация базы данных...")
     init_database()
-
     try:
+        # Теперь эта функция тоже использует правильный DB_FILE
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             if not _check_column_exists(cursor, "games", "funpay_offer_ids"):
@@ -36,9 +43,7 @@ def initialize_and_update_db():
         logging.critical(f"КРИТИЧЕСКАЯ ОШИБКА при обновлении схемы БД: {e}")
         raise
 
-
 # ... (весь остальной ваш код остается без изменений) ...
-# (весь остальной ваш код остается без изменений) ...
 
 def create_rental_from_gui(client_name, account_id, total_minutes, info):
     try:
@@ -62,14 +67,7 @@ def move_rental_to_history(rental_id):
         rental_info = db_query("SELECT account_id FROM rentals WHERE id = ?", (rental_id,), fetch="one")
         if rental_info and rental_info[0]:
             db_query("UPDATE accounts SET rented_by = NULL WHERE id = ?", (rental_info[0],))
-        # ВАЖНО: Мы должны проверять существование колонки is_history перед обновлением
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            if _check_column_exists(cursor, "rentals", "is_history"):
-                cursor.execute("UPDATE rentals SET is_history = 1 WHERE id = ?", (rental_id,))
-            else:  # Если колонки нет, можно ее создать или просто пропустить
-                logging.warning("Колонка 'is_history' не найдена в таблице rentals. Пропускаем обновление.")
-            conn.commit()
+        db_query("UPDATE rentals SET is_history = 1 WHERE id = ?", (rental_id,))
         return True
     except Exception as e:
         logging.error(f"Ошибка перемещения аренды {rental_id} в историю: {e}")
@@ -80,10 +78,12 @@ def extend_rental_from_gui(rental_id, minutes_to_add):
     try:
         res = db_query("SELECT end_time, initial_minutes FROM rentals WHERE id = ?", (rental_id,), fetch="one")
         if not res: return False
+
         current_end_time = datetime.fromisoformat(res[0])
         new_end = current_end_time + timedelta(minutes=minutes_to_add)
         new_remind = new_end - timedelta(minutes=5)
         new_initial_minutes = (res[1] or 0) + minutes_to_add
+
         db_query(
             "UPDATE rentals SET end_time = ?, remind_time = ?, reminded = 0, pre_reminded = 0, initial_minutes = ? WHERE id = ?",
             (new_end.isoformat(), new_remind.isoformat(), new_initial_minutes, rental_id))
@@ -140,21 +140,9 @@ def import_accounts_from_csv(file_path):
 
 
 def get_user_rental_info(username):
-    # Убедимся, что колонка is_history существует перед запросом
-    try:
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            if _check_column_exists(cursor, "rentals", "is_history"):
-                return db_query(
-                    "SELECT end_time FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
-                    (username,), fetch="one")
-            else:
-                return db_query(
-                    "SELECT end_time FROM rentals WHERE client_name = ? ORDER BY end_time DESC LIMIT 1",
-                    (username,), fetch="one")
-    except Exception as e:
-        logging.error(f"Ошибка получения информации об аренде для пользователя {username}: {e}")
-        return None
+    return db_query(
+        "SELECT end_time FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
+        (username,), fetch="one")
 
 
 def get_games_stats():
@@ -186,11 +174,6 @@ def rent_account(game_name, client_name, minutes, chat_id):
 
 def check_and_process_expired_rentals():
     now_iso = datetime.now(MOSCOW_TZ).isoformat()
-    # Проверяем наличие колонки is_history
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        if not _check_column_exists(cursor, "rentals", "is_history"):
-            return set()  # Если колонки нет, выходим
     expired_rentals = db_query("SELECT id, account_id FROM rentals WHERE end_time <= ? AND is_history = 0", (now_iso,),
                                fetch="all")
     if not expired_rentals: return set()
@@ -206,12 +189,6 @@ def check_and_process_expired_rentals():
 
 def get_rentals_for_reminder():
     now_iso = datetime.now(MOSCOW_TZ).isoformat()
-    # Проверяем наличие колонки is_history и pre_reminded
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        if not _check_column_exists(cursor, "rentals", "is_history") or not _check_column_exists(cursor, "rentals",
-                                                                                                 "pre_reminded"):
-            return []
     return db_query(
         "SELECT id, client_name, funpay_chat_id FROM rentals WHERE remind_time <= ? AND is_history = 0 AND pre_reminded = 0",
         (now_iso,), fetch="all")
@@ -227,11 +204,6 @@ def get_all_game_names():
 
 
 def extend_user_rental(username, hours_to_add):
-    # Проверяем наличие колонки is_history
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        if not _check_column_exists(cursor, "rentals", "is_history"):
-            return None
     rental = db_query(
         "SELECT id, end_time, initial_minutes FROM rentals WHERE client_name = ? AND is_history = 0 ORDER BY end_time DESC LIMIT 1",
         (username,), fetch="one")

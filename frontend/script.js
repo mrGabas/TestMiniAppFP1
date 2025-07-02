@@ -1,6 +1,6 @@
 // Эта функция содержит всю основную логику вашего приложения.
 function mainApp() {
-    const API_BASE_URL = 'https://2b45-186-139-105-180.ngrok-free.app'; // <-- УБЕДИТЕСЬ, ЧТО URL АКТУАЛЕН
+    const API_BASE_URL = 'https://eab2-186-139-105-180.ngrok-free.app'; // <-- УБЕДИТЕСЬ, ЧТО URL АКТУАЛЕН
 
     // Показываем основной контейнер и скрываем загрузку
     const appLoading = document.getElementById('app-loading');
