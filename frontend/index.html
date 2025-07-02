@@ -12,6 +12,7 @@
 
     <div class="container" id="app-container" style="display: none;">
         <h1>Панель управления</h1>
+        <div id="connection-status"></div>
 
         <div class="controls">
             <button id="show-active-rentals-btn">Активные</button>
@@ -20,60 +21,57 @@
             <button id="show-management-btn">Управление</button>
         </div>
 
+        <!-- Контейнер для активных аренд и истории -->
         <div id="rentals-list-container" class="data-container">
             <h2 id="rentals-title"></h2>
             <div id="rentals-list" class="list"></div>
         </div>
-        <div id="manual-rental-container" class="data-container">
-             </div>
 
-        <div id="management-container" class="data-container" style="display: none;">
-            <h2>Управление</h2>
-
-            <div class="management-section">
-                <h3>Добавить новую игру</h3>
-                <form id="add-game-form">
-                    <div class="form-group">
-                        <label for="new-game-name">Название игры:</label>
-                        <input type="text" id="new-game-name" placeholder="Например, Elden Ring" required>
-                    </div>
-                    <button type="submit">Добавить игру</button>
-                </form>
-            </div>
-
-            <div class="management-section">
-                <h3>Добавить новый аккаунт</h3>
-                <form id="add-account-form">
-                    <div class="form-group">
-                        <label for="new-account-game">Игра:</label>
-                        <select id="new-account-game" required>
-                            <option value="">-- Сначала добавьте игры --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="new-account-login">Логин:</label>
-                        <input type="text" id="new-account-login" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="new-account-password">Пароль:</label>
-                        <input type="text" id="new-account-password" required>
-                    </div>
-                    <button type="submit">Добавить аккаунт</button>
-                </form>
-            </div>
-
-            <div class="management-section">
-                <h3>Редактировать лоты (FunPay Offer IDs)</h3>
+        <!-- Контейнер для ручной аренды -->
+        <div id="manual-rental-container" class="data-container" style="display: none;">
+            <h2>Создать аренду вручную</h2>
+            <form id="manual-rental-form">
                 <div class="form-group">
-                    <label for="edit-offers-game">Выберите игру:</label>
-                    <select id="edit-offers-game">
-                        <option value="">-- Выберите игру --</option>
+                    <label for="client-name">Имя клиента:</label>
+                    <input type="text" id="client-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="account-select">Аккаунт:</label>
+                    <select id="account-select" required>
+                        <option value="">Загрузка...</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="game-offers">ID лотов (через запятую):</label>
-                    <textarea id="game-offers" rows="3" placeholder="Например, 12345,67890"></textarea>
+                    <label for="rental-duration">Длительность (минут):</label>
+                    <input type="number" id="rental-duration" value="60" required>
                 </div>
+                <button type="submit">Создать аренду</button>
+            </form>
+        </div>
+
+        <!-- Контейнер для управления -->
+        <div id="management-container" class="data-container" style="display: none;">
+            <h2>Управление</h2>
+            <div class="management-section">
+                <h3>Добавить новую игру</h3>
+                <form id="add-game-form">
+                    <div class="form-group"><label for="new-game-name">Название игры:</label><input type="text" id="new-game-name" required></div>
+                    <button type="submit">Добавить игру</button>
+                </form>
+            </div>
+            <div class="management-section">
+                <h3>Добавить новый аккаунт</h3>
+                <form id="add-account-form">
+                    <div class="form-group"><label for="new-account-game">Игра:</label><select id="new-account-game" required></select></div>
+                    <div class="form-group"><label for="new-account-login">Логин:</label><input type="text" id="new-account-login" required></div>
+                    <div class="form-group"><label for="new-account-password">Пароль:</label><input type="text" id="new-account-password" required></div>
+                    <button type="submit">Добавить аккаунт</button>
+                </form>
+            </div>
+            <div class="management-section">
+                <h3>Редактировать лоты (FunPay Offer IDs)</h3>
+                <div class="form-group"><label for="edit-offers-game">Выберите игру:</label><select id="edit-offers-game"></select></div>
+                <div class="form-group"><label for="game-offers">ID лотов (через запятую):</label><textarea id="game-offers" rows="3"></textarea></div>
                 <button id="save-offers-btn">Сохранить лоты</button>
             </div>
         </div>
