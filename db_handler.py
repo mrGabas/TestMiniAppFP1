@@ -1,42 +1,47 @@
 import sqlite3
 import logging
-from datetime import datetime
 import pytz
-from datetime import timedelta
 import uuid
 import csv
+from datetime import datetime, timedelta
 
 # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
 # УДАЛЯЕМ импорт неправильного пути из config.py
-# from config import DB_FILE 
+# from config import DB_FILE
 
 # ДОБАВЛЯЕМ импорт правильного, абсолютного пути из database.py
 from database import db_query, init_database, DB_FILE
 # -----------------------------
 
-
 # Устанавливаем часовой пояс
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
-
 def _check_column_exists(cursor, table_name, column_name):
+    """Проверяет, существует ли колонка в таблице."""
     cursor.execute(f"PRAGMA table_info({table_name})")
-    return column_name in [row[1] for row in cursor.fetchall()]
-
+    return any(column[1] == column_name for column in cursor.fetchall())
 
 def initialize_and_update_db():
+    """Инициализирует БД и обновляет схему, если необходимо."""
     logging.info("Проверка и инициализация базы данных...")
     init_database()
     try:
         # Теперь эта функция тоже использует правильный DB_FILE
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
-            if not _check_column_exists(cursor, "games", "funpay_offer_ids"):
-                cursor.execute("ALTER TABLE games ADD COLUMN funpay_offer_ids TEXT")
-            if not _check_column_exists(cursor, "rentals", "funpay_chat_id"):
-                cursor.execute("ALTER TABLE rentals ADD COLUMN funpay_chat_id TEXT")
-            if not _check_column_exists(cursor, "rentals", "pre_reminded"):
-                cursor.execute("ALTER TABLE rentals ADD COLUMN pre_reminded INTEGER DEFAULT 0")
+            columns_to_add = {
+                "games": ["funpay_offer_ids TEXT"],
+                "rentals": [
+                    "funpay_chat_id TEXT",
+                    "pre_reminded INTEGER DEFAULT 0"
+                ]
+            }
+            for table, columns in columns_to_add.items():
+                for column_def in columns:
+                    column_name = column_def.split()[0]
+                    if not _check_column_exists(cursor, table, column_name):
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
+                        logging.info(f"Добавлена колонка {column_name} в таблицу {table}.")
             conn.commit()
             logging.info("Схема базы данных актуальна.")
     except sqlite3.Error as e:

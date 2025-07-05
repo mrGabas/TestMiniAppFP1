@@ -81,70 +81,92 @@ function mainApp() {
     async function fetchData(url, options = {}) {
         try {
             const response = await fetch(url, options);
+            const responseData = await response.json();
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: response.statusText }));
-                throw new Error(`Ошибка сервера: ${errorData.error || response.statusText}`);
+                const errorMessage = responseData.error || `Ошибка сервера (статус: ${response.status})`;
+                throw new Error(errorMessage);
             }
-            return response.json();
+            return responseData;
         } catch (error) {
-            console.error('Ошибка при загрузке данных:', error);
+            console.error('Ошибка при выполнении запроса:', error);
             alert(`Произошла ошибка: ${error.message}`);
             throw error;
         }
     }
 
-    function fetchRentals(type) {
+    async function fetchRentals(type) {
         if (!rentalsListDiv) return;
-        rentalsListDiv.innerHTML = '<div class="list-item">Загрузка...</div>';
-        fetchData(`${API_BASE_URL}/api/rentals/${type}`)
-            .then(data => {
-                rentalsListDiv.innerHTML = '';
-                if (!data || data.length === 0) {
-                    rentalsListDiv.innerHTML = '<div class="list-item">Список пуст.</div>';
-                    return;
-                }
-                data.forEach(r => {
-                    const el = document.createElement('div');
-                    el.className = 'list-item';
-                    const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-                    const returnDate = r.return_date !== 'Не возвращена'
-                        ? new Date(r.return_date).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
-                        : 'Активна';
+        rentalsListDiv.innerHTML = 'Загрузка...';
+        try {
+            const data = await fetchData(`${API_BASE_URL}/api/rentals/${type}`);
+            rentalsListDiv.innerHTML = '';
+            if (!data || data.length === 0) {
+                rentalsListDiv.textContent = 'Список пуст.';
+                return;
+            }
+            data.forEach(r => {
+                const el = document.createElement('div');
+                el.className = 'list-item';
+                const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU');
+                const returnDate = r.return_date;
 
-                    let buttonsHtml = '';
-                    if (type === 'active') {
-                        buttonsHtml = `
-                            <div class="item-actions">
-                                <button class="action-btn extend-btn" data-id="${r.id}">Продлить</button>
-                                <button class="action-btn finish-btn" data-id="${r.id}">Завершить</button>
-                            </div>
-                        `;
-                    }
-
-                    // Новая, структурированная верстка для карточки
-                    el.innerHTML = `
-                        <div class="rental-card-game">${r.game_name || 'N/A'}</div>
-                        <div class="rental-card-row">
-                            <span class="rental-card-label">Клиент:</span>
-                            <span class="rental-card-value">${r.user_name} (${r.user_username || 'N/A'})</span>
+                let buttonsHtml = '';
+                if (type === 'active') {
+                    buttonsHtml = `
+                        <div class="item-actions">
+                            <button class="action-btn extend-btn" data-id="${r.id}">Продлить</button>
+                            <button class="action-btn finish-btn" data-id="${r.id}">Завершить</button>
                         </div>
-                        <div class="rental-card-row">
-                            <span class="rental-card-label">Начало:</span>
-                            <span class="rental-card-value">${rentalDate}</span>
-                        </div>
-                        <div class="rental-card-row">
-                            <span class="rental-card-label">Конец:</span>
-                            <span class="rental-card-value">${returnDate}</span>
-                        </div>
-                        ${buttonsHtml}
                     `;
-                    rentalsListDiv.appendChild(el);
-                });
-            }).catch(() => { if (rentalsListDiv) rentalsListDiv.innerHTML = '<div class="list-item">Не удалось загрузить аренды.</div>'; });
+                }
+                el.innerHTML = `
+                    <div class="rental-card-game">${r.game_name || 'N/A'}</div>
+                    <div class="rental-card-row"><span class="rental-card-label">Клиент:</span><span class="rental-card-value">${r.user_name} (${r.user_username || 'N/A'})</span></div>
+                    <div class="rental-card-row"><span class="rental-card-label">Начало:</span><span class="rental-card-value">${rentalDate}</span></div>
+                    <div class="rental-card-row"><span class="rental-card-label">Конец:</span><span class="rental-card-value">${returnDate}</span></div>
+                    ${buttonsHtml}
+                `;
+                rentalsListDiv.appendChild(el);
+            });
+        } catch (error) {
+            if (rentalsListDiv) rentalsListDiv.textContent = 'Не удалось загрузить аренды.';
+        }
     }
 
-    // --- ИСПРАВЛЕНИЕ: ВСЯ ЛОГИКА НИЖЕ ТЕПЕРЬ ВНУТРИ mainApp ---
+    async function fetchAvailableAccounts() {
+        if (!manualAccountSelect) return;
+        manualAccountSelect.innerHTML = '<option value="">Загрузка...</option>';
+        try {
+            const accounts = await fetchData(`${API_BASE_URL}/api/accounts/available`);
+            manualAccountSelect.innerHTML = '<option value="">-- Выберите аккаунт --</option>';
+            if (accounts && accounts.length > 0) {
+                accounts.forEach(acc => manualAccountSelect.add(new Option(`${acc.game_name} - ${acc.login}`, acc.id)));
+            } else {
+                manualAccountSelect.innerHTML = '<option value="">Нет свободных аккаунтов</option>';
+            }
+        } catch (error) {
+            if (manualAccountSelect) manualAccountSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+        }
+    }
 
+    async function populateGameSelects() {
+        try {
+            const games = await fetchData(`${API_BASE_URL}/api/games`);
+            const selects = [newAccountGameSelect, editOffersGameSelect];
+            selects.forEach(select => {
+                if (select) select.innerHTML = '<option value="">-- Выберите игру --</option>';
+            });
+            if (games && games.length > 0) {
+                games.forEach(game => {
+                    selects.forEach(select => {
+                        if (select) select.add(new Option(game.name, game.id));
+                    });
+                });
+            }
+        } catch (error) { /* Ошибка уже показана */ }
+    }
+
+    // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
     rentalsListDiv.addEventListener('click', async (event) => {
         const target = event.target;
         const rentalId = target.dataset.id;
@@ -188,37 +210,6 @@ function mainApp() {
             fetchRentals('active');
         } catch (error) { /* Ошибка уже показана */ }
     });
-
-    function fetchAvailableAccounts() {
-        if (!manualAccountSelect) return;
-        manualAccountSelect.innerHTML = '<option value="">Загрузка...</option>';
-        fetchData(`${API_BASE_URL}/api/accounts/available`)
-            .then(accounts => {
-                manualAccountSelect.innerHTML = '<option value="">-- Выберите аккаунт --</option>';
-                if (accounts && accounts.length > 0) {
-                    accounts.forEach(acc => manualAccountSelect.add(new Option(`${acc.game_name} - ${acc.login}`, acc.id)));
-                } else {
-                    manualAccountSelect.innerHTML = '<option value="">Нет свободных аккаунтов</option>';
-                }
-            }).catch(() => { if (manualAccountSelect) manualAccountSelect.innerHTML = '<option value="">Ошибка загрузки</option>'; });
-    }
-
-    async function populateGameSelects() {
-        try {
-            const games = await fetchData(`${API_BASE_URL}/api/games`);
-            const selects = [newAccountGameSelect, editOffersGameSelect];
-            selects.forEach(select => {
-                if (select) select.innerHTML = '<option value="">-- Выберите игру --</option>';
-            });
-            if (games && games.length > 0) {
-                games.forEach(game => {
-                    selects.forEach(select => {
-                        if (select) select.add(new Option(game.name, game.id));
-                    });
-                });
-            }
-        } catch (error) { /* Ошибка уже показана */ }
-    }
 
     if (manualRentalForm) manualRentalForm.addEventListener('submit', async (e) => {
         e.preventDefault();
