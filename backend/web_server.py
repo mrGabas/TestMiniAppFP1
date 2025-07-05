@@ -32,6 +32,7 @@ def static_proxy(path): return app.send_static_file(path)
 
 # --- ХЕЛПЕРЫ ---
 def format_rentals_data(rentals_raw):
+    """Форматирует данные об арендах для JSON ответа."""
     rentals = []
     for row in rentals_raw:
         rentals.append({
@@ -44,6 +45,7 @@ def format_rentals_data(rentals_raw):
 # --- API ДЛЯ АРЕНД ---
 @app.route('/api/rentals/<string:rental_type>')
 def api_get_rentals(rental_type):
+    """Получает список активных аренд или историю."""
     try:
         now_iso = datetime.now(MOSCOW_TZ).isoformat()
         if rental_type == 'active':
@@ -53,12 +55,12 @@ def api_get_rentals(rental_type):
             query = "SELECT r.id, r.client_name, a.login, g.name, r.start_time, r.end_time FROM rentals r LEFT JOIN accounts a ON r.account_id = a.id LEFT JOIN games g ON a.game_id = g.id WHERE r.end_time <= ? OR r.is_history = 1 ORDER BY r.start_time DESC LIMIT 50"
             params = (now_iso,)
         else:
-            return jsonify({"error": "Неверный тип аренд"}), 404
+            return jsonify({"success": False, "error": "Неверный тип аренд"}), 404
 
         rentals_raw = db_query(query, params=params, fetch="all")
         return jsonify(format_rentals_data(rentals_raw or []))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # --- API ДЛЯ УПРАВЛЕНИЯ АРЕНДАМИ ---
@@ -92,13 +94,11 @@ def api_get_games():
         games_raw = db_query("SELECT id, name, funpay_offer_ids FROM games ORDER BY name", fetch="all")
         return jsonify([{"id": g[0], "name": g[1], "offers": g[2] or ""} for g in games_raw or []])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-# --- ИСПРАВЛЕНИЕ: ДОБАВЛЕН ЭТОТ МАРШРУТ ---
 @app.route('/api/games/<int:game_id>/offers', methods=['GET'])
 def get_game_offers(game_id):
-    """Возвращает список ID лотов для конкретной игры."""
     try:
         result = db_query("SELECT funpay_offer_ids FROM games WHERE id = ?", (game_id,), fetch="one")
         offers = result[0] if result and result[0] else ""
@@ -107,8 +107,6 @@ def get_game_offers(game_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# -----------------------------------------
-
 @app.route('/api/accounts/available', methods=['GET'])
 def api_get_available_accounts():
     try:
@@ -116,7 +114,7 @@ def api_get_available_accounts():
         accounts_raw = db_query(query, fetch="all")
         return jsonify([{"id": acc[0], "login": acc[1], "game_name": acc[2]} for acc in accounts_raw or []])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/rentals/create', methods=['POST'])

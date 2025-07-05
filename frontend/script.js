@@ -1,8 +1,16 @@
-// Эта функция содержит всю основную логику вашего приложения.
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+        mainApp();
+    } catch (e) {
+        document.body.innerHTML = `<div style="color: red; padding: 20px;">Критическая ошибка: ${e.message}</div>`;
+    }
+});
+
 function mainApp() {
     const API_BASE_URL = 'https://4d06-186-139-105-180.ngrok-free.app'; // <-- УБЕДИТЕСЬ, ЧТО URL АКТУАЛЕН
 
-    // Показываем основной контейнер и скрываем загрузку
     const appLoading = document.getElementById('app-loading');
     if (appLoading) appLoading.style.display = 'none';
 
@@ -23,18 +31,15 @@ function mainApp() {
     const rentalsTitle = document.getElementById('rentals-title');
     const rentalsListDiv = document.getElementById('rentals-list');
 
-    // Элементы для управления арендой
     const extendModal = document.getElementById('extend-modal');
     const confirmExtendBtn = document.getElementById('confirm-extend-btn');
     const cancelExtendBtn = document.getElementById('cancel-extend-btn');
     const extendMinutesInput = document.getElementById('extend-minutes-input');
     let currentRentalIdForExtend = null;
 
-    // Элементы ручной аренды
     const manualRentalForm = document.getElementById('manual-rental-form');
     const manualAccountSelect = document.getElementById('account-select');
 
-    // Элементы управления
     const addGameForm = document.getElementById('add-game-form');
     const addAccountForm = document.getElementById('add-account-form');
     const newAccountGameSelect = document.getElementById('new-account-game');
@@ -42,10 +47,7 @@ function mainApp() {
     const gameOffersTextarea = document.getElementById('game-offers');
     const saveOffersBtn = document.getElementById('save-offers-btn');
 
-    if (statusDiv) {
-        statusDiv.textContent = 'Подключение успешно!';
-        statusDiv.style.color = 'green';
-    }
+    if (statusDiv) statusDiv.textContent = 'Подключение успешно!';
 
     function showScreen(screenToShow) {
         [rentalsContainer, manualRentalContainer, managementContainer].forEach(screen => {
@@ -55,24 +57,24 @@ function mainApp() {
     }
 
     // --- ОБРАБОТЧИКИ КНОПОК НАВИГАЦИИ ---
-    if (showActiveRentalsBtn) showActiveRentalsBtn.addEventListener('click', () => {
+    showActiveRentalsBtn.addEventListener('click', () => {
         showScreen(rentalsContainer);
-        if (rentalsTitle) rentalsTitle.textContent = 'Активные аренды';
+        rentalsTitle.textContent = 'Активные аренды';
         fetchRentals('active');
     });
 
-    if (showHistoryRentalsBtn) showHistoryRentalsBtn.addEventListener('click', () => {
+    showHistoryRentalsBtn.addEventListener('click', () => {
         showScreen(rentalsContainer);
-        if (rentalsTitle) rentalsTitle.textContent = 'История аренд';
+        rentalsTitle.textContent = 'История аренд';
         fetchRentals('history');
     });
 
-    if (showManualRentalBtn) showManualRentalBtn.addEventListener('click', () => {
+    showManualRentalBtn.addEventListener('click', () => {
         showScreen(manualRentalContainer);
         fetchAvailableAccounts();
     });
 
-    if (showManagementBtn) showManagementBtn.addEventListener('click', () => {
+    showManagementBtn.addEventListener('click', () => {
         showScreen(managementContainer);
         populateGameSelects();
     });
@@ -81,12 +83,11 @@ function mainApp() {
     async function fetchData(url, options = {}) {
         try {
             const response = await fetch(url, options);
-            const responseData = await response.json();
+            const data = await response.json();
             if (!response.ok) {
-                const errorMessage = responseData.error || `Ошибка сервера (статус: ${response.status})`;
-                throw new Error(errorMessage);
+                throw new Error(data.error || `Ошибка сервера (статус: ${response.status})`);
             }
-            return responseData;
+            return data;
         } catch (error) {
             console.error('Ошибка при выполнении запроса:', error);
             alert(`Произошла ошибка: ${error.message}`);
@@ -96,28 +97,23 @@ function mainApp() {
 
     async function fetchRentals(type) {
         if (!rentalsListDiv) return;
-        rentalsListDiv.innerHTML = 'Загрузка...';
+        rentalsListDiv.innerHTML = '<div class="list-item">Загрузка...</div>';
         try {
             const data = await fetchData(`${API_BASE_URL}/api/rentals/${type}`);
             rentalsListDiv.innerHTML = '';
             if (!data || data.length === 0) {
-                rentalsListDiv.textContent = 'Список пуст.';
+                rentalsListDiv.innerHTML = '<div class="list-item">Список пуст.</div>';
                 return;
             }
             data.forEach(r => {
                 const el = document.createElement('div');
                 el.className = 'list-item';
-                const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU');
+                const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
                 const returnDate = r.return_date;
 
                 let buttonsHtml = '';
                 if (type === 'active') {
-                    buttonsHtml = `
-                        <div class="item-actions">
-                            <button class="action-btn extend-btn" data-id="${r.id}">Продлить</button>
-                            <button class="action-btn finish-btn" data-id="${r.id}">Завершить</button>
-                        </div>
-                    `;
+                    buttonsHtml = `<div class="item-actions"><button class="action-btn extend-btn" data-id="${r.id}">Продлить</button><button class="action-btn finish-btn" data-id="${r.id}">Завершить</button></div>`;
                 }
                 el.innerHTML = `
                     <div class="rental-card-game">${r.game_name || 'N/A'}</div>
@@ -129,7 +125,7 @@ function mainApp() {
                 rentalsListDiv.appendChild(el);
             });
         } catch (error) {
-            if (rentalsListDiv) rentalsListDiv.textContent = 'Не удалось загрузить аренды.';
+            if (rentalsListDiv) rentalsListDiv.innerHTML = '<div class="list-item">Не удалось загрузить аренды.</div>';
         }
     }
 
@@ -281,14 +277,3 @@ function mainApp() {
     // --- Инициализация при запуске ---
     if (showActiveRentalsBtn) showActiveRentalsBtn.click();
 }
-
-// --- ГЛАВНЫЙ ВХОД В ПРИЛОЖЕНИЕ ---
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-        mainApp();
-    } catch (e) {
-        document.body.innerHTML = `<div style="color: red; padding: 20px;">Критическая ошибка при инициализации: ${e.message}</div>`;
-    }
-});
