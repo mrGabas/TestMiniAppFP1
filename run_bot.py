@@ -1,92 +1,86 @@
-# run_bot.py
+import asyncio
 import logging
-import os
-import threading
-import time
-from queue import Queue
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
-from FunPayAPI.account import Account
-import config
-import db_handler
-from bot_handler import funpay_bot_listener, expired_rentals_checker, sync_games_with_funpay_offers
-import telegram_bot  # Импортируем наш новый модуль
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID
+from db_handler import (
+    initialize_and_update_db, check_and_process_expired_rentals,
+    get_rentals_for_reminder, mark_rental_as_reminded
+)
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def main():
-    # 1. Настройка логирования
-    log_dir = os.path.dirname(config.LOG_FILE)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s')
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-
-    file_handler = logging.FileHandler(config.LOG_FILE, 'a', 'utf-8')
-    file_handler.setFormatter(log_formatter)
-    root_logger.addHandler(file_handler)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_formatter)
-    root_logger.addHandler(console_handler)
-
-    logging.getLogger('apscheduler').setLevel(logging.WARNING)
-
-    logging.info("=" * 30)
-    logging.info("Начало запуска серверного бота...")
-
-    # 2. Инициализация и обновление БД
+async def send_admin_message(bot: Bot, text: str):
+    """Отправляет сообщение админу."""
     try:
-        db_handler.initialize_and_update_db()
+        if TELEGRAM_ADMIN_CHAT_ID:
+            await bot.send_message(TELEGRAM_ADMIN_CHAT_ID, text)
     except Exception as e:
-        logging.critical(f"Не удалось инициализировать БД. Выход. Ошибка: {e}")
-        return
+        logging.error(f"Не удалось отправить сообщение админу: {e}")
 
-    # 3. Инициализация аккаунта FunPay
+
+async def check_rentals_periodically(bot: Bot):
+    """Периодически проверяет истекшие аренды и отправляет напоминания."""
+    while True:
+        try:
+            # 1. Проверка истекших аренд
+            freed_games = check_and_process_expired_rentals()
+            if freed_games:
+                logging.info(f"Завершены аренды для игр с ID: {freed_games}")
+                await send_admin_message(bot, f"✅ Аренды завершены, аккаунты освобождены.")
+
+            # 2. Отправка напоминаний
+            rentals_to_remind = get_rentals_for_reminder()
+            if rentals_to_remind:
+                for rental_id, client_name, chat_id in rentals_to_remind:
+                    try:
+                        await send_admin_message(bot,
+                                                 f"🔔 Пора отправить напоминание клиенту {client_name} (аренда #{rental_id})")
+                        mark_rental_as_reminded(rental_id)
+                    except Exception as e:
+                        logging.error(f"Ошибка отправки напоминания для аренды {rental_id}: {e}")
+
+        except Exception as e:
+            logging.error(f"Ошибка в цикле проверки аренд: {e}")
+            await send_admin_message(bot, f"❗️ Критическая ошибка в фоновой задаче проверки аренд: {e}")
+
+        # Проверка каждую минуту
+        await asyncio.sleep(60)
+
+
+async def main():
+    """Главная функция для запуска бота."""
+    # Инициализация бота и диспетчера
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
+
+    # Инициализируем базу данных
+    initialize_and_update_db()
+
+    # Запускаем фоновую задачу проверки аренд
+    asyncio.create_task(check_rentals_periodically(bot))
+
+    # Здесь в будущем можно будет запустить прослушиватель FunPay
+    # asyncio.create_task(listen_funpay(bot))
+
+    # Отправляем сообщение админу о том, что бот запущен
+    await send_admin_message(bot, "🚀 Бот (фоновый сервис) запущен.")
+
+    # Запускаем long polling
     try:
-        if not config.GOLDEN_KEY or not config.USER_AGENT:
-            raise ValueError("GOLDEN_KEY или USER_AGENT не указаны в config.py")
-        account = Account(golden_key=config.GOLDEN_KEY, user_agent=config.USER_AGENT)
+        # Мы удаляем все накопленные обновления, чтобы бот не отвечал на старые команды
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
-        # <<< ИСПРАВЛЕНИЕ: Добавлена инициализация аккаунта для загрузки данных >>>
-        account.get()
-        # <<< КОНЕЦ ИСПРАВЛЕНИЯ >>>
 
-        logging.info(f"Авторизация на FunPay как '{account.username}' (ID: {account.id}).")
-    except Exception as e:
-        logging.critical(f"Не удалось авторизоваться на FunPay. Проверьте токен. Ошибка: {e}")
-        return
-
-    # 4. Первичная синхронизация лотов с БД
+if __name__ == '__main__':
     try:
-        sync_games_with_funpay_offers(account)
-    except Exception as e:
-        logging.error(f"Произошла ошибка во время первичной синхронизации лотов: {e}")
-
-    # 5. Запуск фоновых потоков
-
-    # Поток для прослушивания событий FunPay
-    funpay_thread = threading.Thread(target=funpay_bot_listener, args=(account, None), daemon=True)
-    funpay_thread.start()
-    logging.info("Поток прослушивания FunPay запущен.")
-
-    # Поток для проверки истекших аренд и статусов лотов
-    checker_thread = threading.Thread(target=expired_rentals_checker, args=(account,), daemon=True)
-    checker_thread.start()
-    logging.info("Поток проверки статусов запущен.")
-
-    # Запуск Telegram-бота
-    telegram_bot.start_bot()
-
-    try:
-        while True:
-            time.sleep(3600)  # Главный поток спит, пока остальные работают
-    except KeyboardInterrupt:
-        logging.info("Получен сигнал о завершении работы...")
-        # Остановка Telegram-бота при выходе
-        telegram_bot.stop_bot()
-        logging.info("Серверный бот остановлен.")
-
-
-if __name__ == "__main__":
-    main()
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Бот остановлен.")

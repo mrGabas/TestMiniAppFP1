@@ -10,7 +10,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(project_root)
 
-# --- ИСПРАВЛЕННЫЕ ИМПОРТЫ ---
+# --- ИСПРАВЛЕННЫЙ ИМПОРТ ---
+# Убедимся, что все необходимые функции импортированы
 from database import db_query
 from db_handler import (
     MOSCOW_TZ, create_rental_from_gui, add_game, add_account,
@@ -25,16 +26,14 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # --- ОБЩИЕ МАРШРУТЫ ---
 @app.route('/')
-def index():
-    return app.send_static_file('index.html')
+def index(): return app.send_static_file('index.html')
 
 
 @app.route('/<path:path>')
-def static_proxy(path):
-    return app.send_static_file(path)
+def static_proxy(path): return app.send_static_file(path)
 
 
-# --- МАРШРУТЫ ДЛЯ АРЕНД ---
+# --- ФОРМАТИРОВАНИЕ ДАННЫХ ---
 def format_rentals_data(rentals_raw):
     rentals = []
     for row in rentals_raw:
@@ -45,19 +44,12 @@ def format_rentals_data(rentals_raw):
     return rentals
 
 
+# --- API ДЛЯ АРЕНД ---
 @app.route('/api/rentals/active')
 def api_get_active_rentals():
     try:
         now_iso = datetime.now(MOSCOW_TZ).isoformat()
-        query = """
-                SELECT r.id, r.client_name, a.login, g.name, r.start_time, r.end_time
-                FROM rentals r \
-                         LEFT JOIN accounts a ON r.account_id = a.id \
-                         LEFT JOIN games g ON a.game_id = g.id
-                WHERE r.end_time > ? \
-                  AND (r.is_history = 0 OR r.is_history IS NULL) \
-                ORDER BY r.end_time ASC \
-                """
+        query = "SELECT r.id, r.client_name, a.login, g.name, r.start_time, r.end_time FROM rentals r LEFT JOIN accounts a ON r.account_id = a.id LEFT JOIN games g ON a.game_id = g.id WHERE r.end_time > ? AND (r.is_history = 0 OR r.is_history IS NULL) ORDER BY r.end_time ASC"
         rentals_raw = db_query(query, params=(now_iso,), fetch="all")
         return jsonify(format_rentals_data(rentals_raw or []))
     except Exception as e:
@@ -68,22 +60,49 @@ def api_get_active_rentals():
 def api_get_history_rentals():
     try:
         now_iso = datetime.now(MOSCOW_TZ).isoformat()
-        query = """
-                SELECT r.id, r.client_name, a.login, g.name, r.start_time, r.end_time
-                FROM rentals r \
-                         LEFT JOIN accounts a ON r.account_id = a.id \
-                         LEFT JOIN games g ON a.game_id = g.id
-                WHERE r.end_time <= ? \
-                   OR r.is_history = 1 \
-                ORDER BY r.start_time DESC LIMIT 50 \
-                """
+        query = "SELECT r.id, r.client_name, a.login, g.name, r.start_time, r.end_time FROM rentals r LEFT JOIN accounts a ON r.account_id = a.id LEFT JOIN games g ON a.game_id = g.id WHERE r.end_time <= ? OR r.is_history = 1 ORDER BY r.start_time DESC LIMIT 50"
         rentals_raw = db_query(query, params=(now_iso,), fetch="all")
         return jsonify(format_rentals_data(rentals_raw or []))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# --- МАРШРУТЫ ДЛЯ РУЧНОГО СОЗДАНИЯ АРЕНДЫ ---
+# --- API ДЛЯ УПРАВЛЕНИЯ АРЕНДАМИ ---
+@app.route('/api/rentals/<string:rental_id>/finish', methods=['POST'])
+def api_finish_rental(rental_id):
+    try:
+        success = move_rental_to_history(rental_id)
+        return jsonify(
+            {"success": success, "message": "Аренда успешно завершена." if success else "Не удалось завершить аренду."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/rentals/<string:rental_id>/extend', methods=['POST'])
+def api_extend_rental(rental_id):
+    data = request.get_json()
+    minutes_to_add = data.get('minutes')
+    if not minutes_to_add:
+        return jsonify({"success": False, "error": "Не указано время для продления."}), 400
+    try:
+        success = extend_rental_from_gui(rental_id, int(minutes_to_add))
+        return jsonify({"success": success,
+                        "message": f"Аренда продлена на {minutes_to_add} минут." if success else "Не удалось продлить аренду."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- API ДЛЯ ВКЛАДКИ "УПРАВЛЕНИЕ" ---
+@app.route('/api/games')
+def api_get_games():
+    try:
+        games_raw = db_query("SELECT id, name, funpay_offer_ids FROM games ORDER BY name", fetch="all")
+        games = [{"id": g[0], "name": g[1], "offers": g[2] or ""} for g in games_raw or []]
+        return jsonify(games)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/accounts/available')
 def api_get_available_accounts():
     try:
@@ -103,23 +122,10 @@ def api_create_rental():
             client_name=data.get('client_name'), account_id=int(data.get('account_id')),
             total_minutes=int(data.get('total_minutes')), info="Создано вручную через веб-панель"
         )
-        if success:
-            return jsonify({"success": True, "message": "Аренда успешно создана!"})
-        else:
-            return jsonify({"success": False, "error": "Не удалось создать аренду"}), 500
+        return jsonify(
+            {"success": success, "message": "Аренда успешно создана." if success else "Не удалось создать аренду."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
-
-# --- МАРШРУТЫ ДЛЯ ВКЛАДКИ "УПРАВЛЕНИЕ" ---
-@app.route('/api/games')
-def api_get_games():
-    try:
-        games_raw = db_query("SELECT id, name, funpay_offer_ids FROM games ORDER BY name", fetch="all")
-        games = [{"id": g[0], "name": g[1], "offers": g[2] or ""} for g in games_raw or []]
-        return jsonify(games)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/games/add', methods=['POST'])
@@ -127,7 +133,7 @@ def api_add_game():
     data = request.get_json()
     try:
         add_game(data.get('game_name'))
-        return jsonify({"success": True, "message": f"Игра '{data.get('game_name')}' успешно добавлена."})
+        return jsonify({"success": True, "message": f"Игра '{data.get('game_name')}' добавлена."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -137,16 +143,7 @@ def api_add_account():
     data = request.get_json()
     try:
         add_account(data.get('login'), data.get('password'), int(data.get('game_id')))
-        return jsonify({"success": True, "message": f"Аккаунт '{data.get('login')}' успешно добавлен."})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/games/<int:game_id>/offers', methods=['GET'])
-def api_get_game_offers(game_id):
-    try:
-        result = db_query("SELECT funpay_offer_ids FROM games WHERE id = ?", params=(game_id,), fetch="one")
-        return jsonify({"success": True, "offers": result[0] if result else ""})
+        return jsonify({"success": True, "message": f"Аккаунт '{data.get('login')}' добавлен."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -156,37 +153,10 @@ def api_update_game_offers():
     data = request.get_json()
     try:
         set_game_offer_ids(int(data.get('game_id')), data.get('offers', ''))
-        return jsonify({"success": True, "message": "Лоты успешно обновлены."})
+        return jsonify({"success": True, "message": "Лоты обновлены."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/rentals/<string:rental_id>/finish', methods=['POST'])
-def api_finish_rental(rental_id):
-    """API для досрочного завершения аренды."""
-    try:
-        success = move_rental_to_history(rental_id)
-        if success:
-            return jsonify({"success": True, "message": "Аренда успешно завершена и перенесена в историю."})
-        else:
-            return jsonify({"success": False, "error": "Не удалось завершить аренду."}), 400
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/api/rentals/<string:rental_id>/extend', methods=['POST'])
-def api_extend_rental(rental_id):
-    """API для продления аренды."""
-    data = request.get_json()
-    minutes_to_add = data.get('minutes')
-    if not minutes_to_add:
-        return jsonify({"success": False, "error": "Не указано время для продления."}), 400
-    try:
-        success = extend_rental_from_gui(rental_id, int(minutes_to_add))
-        if success:
-            return jsonify({"success": True, "message": f"Аренда успешно продлена на {minutes_to_add} минут."})
-        else:
-            return jsonify({"success": False, "error": "Не удалось продлить аренду."}), 400
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     try:

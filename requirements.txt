@@ -6,3 +6,4 @@ pytz
 requests
 requests-toolbelt
 urllib3==1.26.18
+aiogram
