@@ -6,10 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="363783dd-bb7d-46d5-9002-e413884b51a9" name="Changes" comment="v 6">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/web_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/web_server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/script.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/script.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bot_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/bot_handler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/rentals.db" beforeDir="false" afterPath="$PROJECT_DIR$/rentals.db" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_bot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/telegram_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/telegram_bot.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -25,6 +25,7 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="HARD" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
   &quot;lastFilter&quot;: {

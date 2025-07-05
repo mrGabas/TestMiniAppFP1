@@ -3,22 +3,15 @@ import logging
 import re
 import time
 import threading
-from datetime import datetime
-import pytz
-
 from FunPayAPI.account import Account
 from FunPayAPI.updater.runner import Runner
-from FunPayAPI.common.enums import EventTypes, SubCategoryTypes
-from config import RENTAL_KEYWORDS, USE_EXPIRATION_GRACE_PERIOD, EXPIRATION_GRACE_PERIOD_MINUTES
+from FunPayAPI.common.enums import EventTypes
 import db_handler
 from telegram_bot import send_telegram_notification, send_telegram_alert
 import localization
 from utils import format_timedelta
 import state_manager
-
-# Глобальная переменная для поочередной проверки игр
-game_check_index = 0
-
+from config import RENTAL_KEYWORDS, USE_EXPIRATION_GRACE_PERIOD, EXPIRATION_GRACE_PERIOD_MINUTES
 
 def sync_games_with_funpay_offers(account: Account):
     """
@@ -86,8 +79,8 @@ def update_offer_status_for_game(account: Account, game_id: int):
     if not game_id: return
     try:
         game_data = db_handler.db_query("""
-            SELECT g.funpay_offer_ids, 
-                   (SELECT COUNT(*) FROM accounts a WHERE a.game_id = g.id AND a.rented_by IS NULL)
+            SELECT g.funpay_offer_ids,
+                   (SELECT COUNT(*) FROM accounts a WHERE a.game_id = g.id AND (a.rented_by IS NULL OR a.rented_by = ''))
             FROM games g WHERE g.id = ?
         """, (game_id,), fetch="one")
         if not (game_data and game_data[0]): return
@@ -102,12 +95,11 @@ def update_offer_status_for_game(account: Account, game_id: int):
 
                 # Логика АКТИВАЦИИ лота
                 if free_accounts > 0 and not is_active:
-                    # Включаем лот ТОЛЬКО ЕСЛИ разрешено глобально
                     if state_manager.are_lots_enabled:
-                        logging.info(f"[LOT_MANAGER] Активация лота {offer_id}.")
+                        logging.info(f"[LOT_MANAGER] Активация лота {offer_id} для игры ID {game_id}.")
                         fields.active = True
                         account.save_lot(fields)
-                        send_telegram_notification(f"✅ Лот {offer_id} АКТИВИРОВАН.")
+                        send_telegram_notification(f"✅ Лот {offer_id} АКТИВИРОВАН (освободился аккаунт).")
                         time.sleep(3)
                     else:
                         logging.info(f"[LOT_MANAGER] Активация лота {offer_id} пропущена (управление отключено).")
@@ -117,7 +109,7 @@ def update_offer_status_for_game(account: Account, game_id: int):
                     logging.info(f"[LOT_MANAGER] Деактивация лота {offer_id} (нет свободных аккаунтов).")
                     fields.active = False
                     account.save_lot(fields)
-                    send_telegram_notification(f"⛔️ Лот {offer_id} ДЕАКТИВИРОВАН.")
+                    send_telegram_notification(f"⛔️ Лот {offer_id} ДЕАКТИВИРОВАН (закончились аккаунты).")
                     time.sleep(3)
             except Exception as e:
                 logging.error(f"[LOT_MANAGER] Ошибка обработки лота {offer_id}: {e}")
@@ -131,14 +123,13 @@ def _force_deactivate_all_lots(account: Account):
     logging.warning("[FORCE_DEACTIVATE] ЗАПУСК ПРИНУДИТЕЛЬНОЙ ДЕАКТИВАЦИИ ВСЕХ ЛОТОВ.")
     all_offer_ids = set()
     try:
-        games_with_ids = db_handler.db_query("SELECT funpay_offer_ids FROM games WHERE funpay_offer_ids IS NOT NULL",
-                                             fetch="all")
+        games_with_ids = db_handler.db_query("SELECT funpay_offer_ids FROM games WHERE funpay_offer_ids IS NOT NULL", fetch="all")
         for (ids_str,) in games_with_ids:
             if ids_str:
                 all_offer_ids.update([int(i.strip()) for i in ids_str.split(',') if i.strip().isdigit()])
 
         if not all_offer_ids:
-            send_telegram_notification("ℹ️ Не найдено лотов для деактивации.")
+            send_telegram_notification("ℹ️ Не найдено лотов для принудительной деактивации.")
             return
 
         deactivated_count = 0
@@ -160,50 +151,12 @@ def _force_deactivate_all_lots(account: Account):
         send_telegram_alert(f"Критическая ошибка при принудительной деактивации лотов: {e}")
 
 def expired_rentals_checker(account: Account):
-    """Фоновый процесс проверки статусов."""
-    logging.info("[SYNC_CHECKER] Запущен объединенный проверщик статусов.")
-    game_ids = [g[0] for g in db_handler.db_query("SELECT id FROM games", fetch="all")]
-    game_check_index = 0
-    while True:
-        try:
-            if state_manager.force_deactivate_all_lots_requested:
-                _force_deactivate_all_lots(account)
-                state_manager.force_deactivate_all_lots_requested = False  # Сбрасываем флаг
-            # <<< ИСПРАВЛЕНИЕ: Убрана ошибочная проверка state_manager.deactivate_all_lots_requested >>>
-            if not state_manager.is_bot_enabled:
-                time.sleep(30)
-                continue
-
-            # Обработка истекших аренд
-            freed_game_ids = db_handler.check_and_process_expired_rentals()
-            for game_id in freed_game_ids:
-                update_offer_status_for_game(account, game_id)
-
-            # Поочередная проверка статусов лотов для отлова ручных изменений
-            if game_ids:
-                if game_check_index >= len(game_ids):
-                    game_check_index = 0
-
-                current_game_id = game_ids[game_check_index]
-                if current_game_id not in freed_game_ids:
-                    update_offer_status_for_game(account, current_game_id)
-
-                game_check_index += 1
-        except Exception as e:
-            logging.exception(f"Ошибка в процессе фоновой синхронизации статусов.")
-        time.sleep(60)
-
-def expired_rentals_checker(account: Account):
     """
-    Фоновый процесс, который:
-    1. Проверяет и отправляет 10-минутные напоминания.
-    2. Проверяет и обрабатывает истекшие аренды.
-    3. Применяет 10-минутную задержку перед повторной активацией лота.
-    4. Выполняет принудительное отключение лотов по команде.
-    5. Поочередно проверяет по одной игре для синхронизации статусов лотов.
+    Фоновый процесс, который выполняет все периодические проверки.
     """
     logging.info("[CHECKER] Запущен объединенный проверщик статусов.")
-    game_ids = [g[0] for g in db_handler.db_query("SELECT id FROM games", fetch="all")]
+    game_ids_query_result = db_handler.db_query("SELECT id FROM games ORDER BY id", fetch="all")
+    game_ids = [g[0] for g in game_ids_query_result] if game_ids_query_result else []
     game_check_index = 0
 
     while True:
@@ -227,11 +180,9 @@ def expired_rentals_checker(account: Account):
                     try:
                         account.send_message(chat_id, reminder_text, chat_name=client_name)
                         db_handler.mark_rental_as_reminded(rental_id)
-                        logging.info(
-                            f"[CHECKER_REMINDER] Напоминание для аренды {rental_id} успешно отправлено в чат {chat_id}.")
+                        logging.info(f"[CHECKER_REMINDER] Напоминание для аренды {rental_id} отправлено в чат {chat_id}.")
                     except Exception as e:
-                        logging.error(
-                            f"[CHECKER_REMINDER] Не удалось отправить напоминание для аренды {rental_id}: {e}")
+                        logging.error(f"[CHECKER_REMINDER] Не удалось отправить напоминание для аренды {rental_id}: {e}")
                     time.sleep(2)
 
             # 3. Обработка истекших аренд
@@ -239,14 +190,11 @@ def expired_rentals_checker(account: Account):
             if freed_game_ids:
                 logging.info(f"[CHECKER_EXPIRED] Освобождены аккаунты для игр (game_ids): {freed_game_ids}.")
                 for game_id in freed_game_ids:
-                    # Применяем задержку, если она включена в конфиге
                     if USE_EXPIRATION_GRACE_PERIOD:
                         delay = EXPIRATION_GRACE_PERIOD_MINUTES * 60
-                        logging.info(
-                            f"[CHECKER_GRACE] Установлена пауза {EXPIRATION_GRACE_PERIOD_MINUTES} мин. перед активацией лотов для game_id {game_id}.")
+                        logging.info(f"[CHECKER_GRACE] Пауза {EXPIRATION_GRACE_PERIOD_MINUTES} мин. перед активацией лотов для game_id {game_id}.")
                         threading.Timer(delay, update_offer_status_for_game, args=[account, game_id]).start()
                     else:
-                        # Если задержка выключена, активируем сразу
                         update_offer_status_for_game(account, game_id)
 
             # 4. Поочередная проверка статусов лотов для отлова ручных изменений
@@ -257,12 +205,11 @@ def expired_rentals_checker(account: Account):
                 current_game_id = game_ids[game_check_index]
                 if current_game_id not in freed_game_ids:
                     update_offer_status_for_game(account, current_game_id)
-
                 game_check_index += 1
+
         except Exception as e:
             logging.exception(f"Ошибка в процессе фоновой синхронизации статусов.")
         time.sleep(60)
-
 def funpay_bot_listener(account, update_queue):
     """Основной обработчик событий FunPay."""
     runner = Runner(account)
