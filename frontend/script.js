@@ -1,6 +1,6 @@
 // Эта функция содержит всю основную логику вашего приложения.
 function mainApp() {
-    const API_BASE_URL = 'https://eab2-186-139-105-180.ngrok-free.app'; // <-- УБЕДИТЕСЬ, ЧТО URL АКТУАЛЕН
+    const API_BASE_URL = 'https://4d06-186-139-105-180.ngrok-free.app'; // <-- УБЕДИТЕСЬ, ЧТО URL АКТУАЛЕН
 
     // Показываем основной контейнер и скрываем загрузку
     const appLoading = document.getElementById('app-loading');
@@ -23,9 +23,18 @@ function mainApp() {
     const rentalsTitle = document.getElementById('rentals-title');
     const rentalsListDiv = document.getElementById('rentals-list');
 
+    // Элементы для управления арендой
+    const extendModal = document.getElementById('extend-modal');
+    const confirmExtendBtn = document.getElementById('confirm-extend-btn');
+    const cancelExtendBtn = document.getElementById('cancel-extend-btn');
+    const extendMinutesInput = document.getElementById('extend-minutes-input');
+    let currentRentalIdForExtend = null;
+
+    // Элементы ручной аренды
     const manualRentalForm = document.getElementById('manual-rental-form');
     const manualAccountSelect = document.getElementById('account-select');
 
+    // Элементы управления
     const addGameForm = document.getElementById('add-game-form');
     const addAccountForm = document.getElementById('add-account-form');
     const newAccountGameSelect = document.getElementById('new-account-game');
@@ -73,40 +82,112 @@ function mainApp() {
         try {
             const response = await fetch(url, options);
             if (!response.ok) {
-                throw new Error(`Сетевой ответ был не в порядке: ${response.statusText}`);
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(`Ошибка сервера: ${errorData.error || response.statusText}`);
             }
-            const data = await response.json();
-            if (data.error) {
-                throw new Error(`Ошибка сервера: ${data.error}`);
-            }
-            return data;
+            return response.json();
         } catch (error) {
             console.error('Ошибка при загрузке данных:', error);
             alert(`Произошла ошибка: ${error.message}`);
-            throw error; // Пробрасываем ошибку дальше, чтобы остановить выполнение
+            throw error;
         }
     }
 
     function fetchRentals(type) {
         if (!rentalsListDiv) return;
-        rentalsListDiv.innerHTML = 'Загрузка...';
+        rentalsListDiv.innerHTML = '<div class="list-item">Загрузка...</div>';
         fetchData(`${API_BASE_URL}/api/rentals/${type}`)
             .then(data => {
                 rentalsListDiv.innerHTML = '';
                 if (!data || data.length === 0) {
-                    rentalsListDiv.textContent = 'Список пуст.';
+                    rentalsListDiv.innerHTML = '<div class="list-item">Список пуст.</div>';
                     return;
                 }
                 data.forEach(r => {
                     const el = document.createElement('div');
                     el.className = 'list-item';
-                    const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU');
-                    const returnDate = r.return_date !== 'Не возвращена' ? new Date(r.return_date).toLocaleString('ru-RU') : 'Активна';
-                    el.innerHTML = `<strong>Игра:</strong> ${r.game_name || 'N/A'} <br><strong>Клиент:</strong> ${r.user_name} (${r.user_username || 'N/A'}) <br><strong>Начало:</strong> ${rentalDate} <br><strong>Конец:</strong> ${returnDate}`;
+                    const rentalDate = new Date(r.rental_date).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+                    const returnDate = r.return_date !== 'Не возвращена'
+                        ? new Date(r.return_date).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Активна';
+
+                    let buttonsHtml = '';
+                    if (type === 'active') {
+                        buttonsHtml = `
+                            <div class="item-actions">
+                                <button class="action-btn extend-btn" data-id="${r.id}">Продлить</button>
+                                <button class="action-btn finish-btn" data-id="${r.id}">Завершить</button>
+                            </div>
+                        `;
+                    }
+
+                    // Новая, структурированная верстка для карточки
+                    el.innerHTML = `
+                        <div class="rental-card-game">${r.game_name || 'N/A'}</div>
+                        <div class="rental-card-row">
+                            <span class="rental-card-label">Клиент:</span>
+                            <span class="rental-card-value">${r.user_name} (${r.user_username || 'N/A'})</span>
+                        </div>
+                        <div class="rental-card-row">
+                            <span class="rental-card-label">Начало:</span>
+                            <span class="rental-card-value">${rentalDate}</span>
+                        </div>
+                        <div class="rental-card-row">
+                            <span class="rental-card-label">Конец:</span>
+                            <span class="rental-card-value">${returnDate}</span>
+                        </div>
+                        ${buttonsHtml}
+                    `;
                     rentalsListDiv.appendChild(el);
                 });
-            }).catch(() => { if (rentalsListDiv) rentalsListDiv.textContent = 'Не удалось загрузить аренды.'; });
+            }).catch(() => { if (rentalsListDiv) rentalsListDiv.innerHTML = '<div class="list-item">Не удалось загрузить аренды.</div>'; });
     }
+
+    // --- ИСПРАВЛЕНИЕ: ВСЯ ЛОГИКА НИЖЕ ТЕПЕРЬ ВНУТРИ mainApp ---
+
+    rentalsListDiv.addEventListener('click', async (event) => {
+        const target = event.target;
+        const rentalId = target.dataset.id;
+        if (!rentalId) return;
+
+        if (target.classList.contains('finish-btn')) {
+            if (confirm(`Вы уверены, что хотите завершить аренду #${rentalId}?`)) {
+                try {
+                    const result = await fetchData(`${API_BASE_URL}/api/rentals/${rentalId}/finish`, { method: 'POST' });
+                    alert(result.message);
+                    fetchRentals('active');
+                } catch (error) { /* Ошибка уже показана */ }
+            }
+        }
+
+        if (target.classList.contains('extend-btn')) {
+            currentRentalIdForExtend = rentalId;
+            if (extendModal) extendModal.style.display = 'flex';
+        }
+    });
+
+    if (cancelExtendBtn) cancelExtendBtn.addEventListener('click', () => {
+        if (extendModal) extendModal.style.display = 'none';
+        currentRentalIdForExtend = null;
+    });
+
+    if (confirmExtendBtn) confirmExtendBtn.addEventListener('click', async () => {
+        const minutes = extendMinutesInput.value;
+        if (!minutes || minutes < 1) {
+            alert('Введите корректное количество минут.');
+            return;
+        }
+        try {
+            const result = await fetchData(`${API_BASE_URL}/api/rentals/${currentRentalIdForExtend}/extend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minutes: minutes })
+            });
+            alert(result.message);
+            if (extendModal) extendModal.style.display = 'none';
+            fetchRentals('active');
+        } catch (error) { /* Ошибка уже показана */ }
+    });
 
     function fetchAvailableAccounts() {
         if (!manualAccountSelect) return;
@@ -136,10 +217,9 @@ function mainApp() {
                     });
                 });
             }
-        } catch (error) { /* Ошибка уже обработана в fetchData */ }
+        } catch (error) { /* Ошибка уже показана */ }
     }
 
-    // --- ОБРАБОТЧИКИ ФОРМ ---
     if (manualRentalForm) manualRentalForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const rentalData = {
@@ -147,8 +227,6 @@ function mainApp() {
             account_id: manualAccountSelect.value,
             total_minutes: document.getElementById('rental-duration').value
         };
-        if (!rentalData.account_id) { alert('Выберите аккаунт.'); return; }
-
         try {
             const result = await fetchData(`${API_BASE_URL}/api/rentals/create`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rentalData)
@@ -156,7 +234,7 @@ function mainApp() {
             alert(result.message || 'Успешно!');
             manualRentalForm.reset();
             if (showActiveRentalsBtn) showActiveRentalsBtn.click();
-        } catch(error) { /* Ошибка уже обработана */ }
+        } catch(error) { /* Ошибка уже показана */ }
     });
 
     if (addGameForm) addGameForm.addEventListener('submit', async (e) => {

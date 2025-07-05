@@ -13,8 +13,8 @@ sys.path.append(project_root)
 # --- ИСПРАВЛЕННЫЕ ИМПОРТЫ ---
 from database import db_query
 from db_handler import (
-    MOSCOW_TZ, create_rental_from_gui,
-    add_game, add_account, set_game_offer_ids
+    MOSCOW_TZ, create_rental_from_gui, add_game, add_account,
+    set_game_offer_ids, move_rental_to_history, extend_rental_from_gui
 )
 
 # -----------------------------
@@ -160,6 +160,33 @@ def api_update_game_offers():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/rentals/<string:rental_id>/finish', methods=['POST'])
+def api_finish_rental(rental_id):
+    """API для досрочного завершения аренды."""
+    try:
+        success = move_rental_to_history(rental_id)
+        if success:
+            return jsonify({"success": True, "message": "Аренда успешно завершена и перенесена в историю."})
+        else:
+            return jsonify({"success": False, "error": "Не удалось завершить аренду."}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/rentals/<string:rental_id>/extend', methods=['POST'])
+def api_extend_rental(rental_id):
+    """API для продления аренды."""
+    data = request.get_json()
+    minutes_to_add = data.get('minutes')
+    if not minutes_to_add:
+        return jsonify({"success": False, "error": "Не указано время для продления."}), 400
+    try:
+        success = extend_rental_from_gui(rental_id, int(minutes_to_add))
+        if success:
+            return jsonify({"success": True, "message": f"Аренда успешно продлена на {minutes_to_add} минут."})
+        else:
+            return jsonify({"success": False, "error": "Не удалось продлить аренду."}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     try:
