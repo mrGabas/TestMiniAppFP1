@@ -4,21 +4,23 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
 import pytz
+from werkzeug.exceptions import HTTPException
+
 # Добавляем корневую директорию
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 import state_manager
-# Импортируем все необходимые функции
 from database import db_query
 from db_handler import (
     initialize_and_update_db, MOSCOW_TZ, create_rental_from_gui, add_game,
     add_account, set_game_offer_ids, move_rental_to_history, extend_rental_from_gui
 )
 
-app = Flask(__name__, static_folder=os.path.join(project_root, 'frontend'), static_url_path='')
+app = Flask(__name__, static_folder=os.path.join(parent_dir, 'frontend'), static_url_path='')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 
 
 # --- ОБЩИЕ МАРШРУТЫ ---
@@ -159,32 +161,63 @@ def api_update_game_offers():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route('/api/settings/bot_status', methods=['GET'])
-def api_get_bot_status():
-    """Возвращает текущий статус работы FunPay бота."""
-    try:
+# --- API ДЛЯ НАСТРОЕК ---
+@app.route('/api/settings/bot_status', methods=['GET', 'POST'])
+def api_bot_status():
+    if request.method == 'GET':
         return jsonify({"success": True, "is_bot_enabled": state_manager.is_bot_enabled})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
 
-
-@app.route('/api/settings/bot_status', methods=['POST'])
-def api_set_bot_status():
-    """Включает или выключает FunPay бота."""
     data = request.get_json()
-    if 'is_bot_enabled' not in data or not isinstance(data['is_bot_enabled'], bool):
-        return jsonify({"success": False, "error": "Неверный формат запроса. Ожидается 'is_bot_enabled': true/false."}), 400
+    new_status = data.get('is_bot_enabled')
+    if not isinstance(new_status, bool):
+        return jsonify({"success": False, "error": "Неверный формат."}), 400
+    state_manager.is_bot_enabled = new_status
+    action = "включен" if new_status else "выключен"
+    return jsonify({"success": True, "message": f"Бот FunPay {action}."})
 
-    try:
-        new_status = data['is_bot_enabled']
-        state_manager.is_bot_enabled = new_status
-        action = "включен" if new_status else "выключен"
-        return jsonify({"success": True, "message": f"Бот FunPay успешно {action}."})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+# ### НОВЫЙ КОД ###
+@app.route('/api/settings/lots_status', methods=['GET', 'POST'])
+def api_lots_status():
+    """Управляет автоматической активацией лотов."""
+    if request.method == 'GET':
+        return jsonify({"success": True, "are_lots_enabled": state_manager.are_lots_enabled})
+
+    data = request.get_json()
+    new_status = data.get('are_lots_enabled')
+    if not isinstance(new_status, bool):
+        return jsonify({"success": False, "error": "Неверный формат."}), 400
+    state_manager.are_lots_enabled = new_status
+    action = "включено" if new_status else "выключено"
+    return jsonify({"success": True, "message": f"Автоматическое управление лотами {action}."})
+
+
+@app.route('/api/settings/force_deactivate', methods=['POST'])
+def api_force_deactivate_lots():
+    """Запускает принудительную деактивацию всех лотов."""
+    state_manager.force_deactivate_all_lots_requested = True
+    return jsonify({"success": True, "message": "Команда на принудительную деактивацию всех лотов отправлена."})
+# ### КОНЕЦ НОВОГО КОДА ###
+
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """Возвращает JSON вместо HTML для HTTP-ошибок."""
+    response = e.get_response()
+    response.data = json.dumps({
+        "code": e.code,
+        "name": e.name,
+        "error": e.description,
+    })
+    response.content_type = "application/json"
+    return response
+
+@app.errorhandler(Exception)
+def handle_generic_exception(e):
+    """Обрабатывает все остальные исключения."""
+    return jsonify(error=f"Внутренняя ошибка сервера: {e}"), 500
 
 
 if __name__ == '__main__':
+    project_root = os.path.dirname(parent_dir)
     try:
         initialize_and_update_db()
         print("База данных успешно инициализирована.")
@@ -193,5 +226,4 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Запуск Flask-сервера на http://127.0.0.1:5000")
-    # Убедитесь, что вы используете use_reloader=False, чтобы избежать двойного запуска
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

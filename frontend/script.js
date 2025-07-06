@@ -24,12 +24,18 @@ function mainApp() {
     const showManualRentalBtn = document.getElementById('show-manual-rental-btn');
     const showManagementBtn = document.getElementById('show-management-btn');
     const showSettingsBtn = document.getElementById('show-settings-btn');
-    const settingsContainer = document.getElementById('settings-container');
-    const funpayBotToggle = document.getElementById('funpay-bot-toggle');
 
+    // --- Контейнеры ---
     const rentalsContainer = document.getElementById('rentals-list-container');
     const manualRentalContainer = document.getElementById('manual-rental-container');
     const managementContainer = document.getElementById('management-container');
+    const settingsContainer = document.getElementById('settings-container');
+
+    // ### НОВЫЕ ЭЛЕМЕНТЫ ###
+    const funpayBotToggle = document.getElementById('funpay-bot-toggle');
+    const funpayLotsToggle = document.getElementById('funpay-lots-toggle');
+    const forceDeactivateBtn = document.getElementById('force-deactivate-btn');
+    // ### КОНЕЦ НОВЫХ ЭЛЕМЕНТОВ ###
 
     const rentalsTitle = document.getElementById('rentals-title');
     const rentalsListDiv = document.getElementById('rentals-list');
@@ -82,29 +88,44 @@ function mainApp() {
         populateGameSelects();
     });
 
-    showManagementBtn.addEventListener('click', () => {
-        showScreen(managementContainer);
-        populateGameSelects();
-    });
-
-    // --- НОВЫЙ ОБРАБОТЧИК ---
     showSettingsBtn.addEventListener('click', () => {
         showScreen(settingsContainer);
         fetchBotStatus();
+        fetchLotsStatus(); // <-- ЗАГРУЖАЕМ СТАТУС ЛОТОВ
     });
 
-    // --- УЛУЧШЕННЫЕ ФУНКЦИИ ЗАГРУЗКИ ДАННЫХ ---
-    async function fetchData(url, options = {}) {
+    // --- ФУНКЦИИ ЗАГРУЗКИ ДАННЫХ ---
+     async function fetchData(url, options = {}) {
         try {
             const response = await fetch(url, options);
-            const data = await response.json();
+
+            // ### ИЗМЕНЕНИЕ ЗДЕСЬ ###
+            const contentType = response.headers.get("content-type");
             if (!response.ok) {
-                throw new Error(data.error || `Ошибка сервера (статус: ${response.status})`);
+                let error_message = `Ошибка HTTP: ${response.status}`;
+                if (contentType && contentType.includes("application/json")) {
+                    const error_data = await response.json();
+                    error_message = error_data.error || JSON.stringify(error_data);
+                }
+                throw new Error(error_message);
             }
-            return data;
+
+            if (contentType && contentType.includes("application/json")) {
+                 return await response.json();
+            } else {
+                // Если ответ не JSON, выводим ошибку, чтобы понять, что пришло
+                const textResponse = await response.text();
+                throw new Error(`Ответ сервера не является JSON. Ответ: ${textResponse.substring(0, 100)}...`);
+            }
+            // ### КОНЕЦ ИЗМЕНЕНИЯ ###
+
         } catch (error) {
             console.error('Ошибка при выполнении запроса:', error);
-            alert(`Произошла ошибка: ${error.message}`);
+            window.Telegram.WebApp.showPopup({
+                title: 'Ошибка',
+                message: error.message,
+                buttons: [{type: 'ok'}]
+            });
             throw error;
         }
     }
@@ -182,9 +203,34 @@ function mainApp() {
             const data = await fetchData(`${API_BASE_URL}/api/settings/bot_status`);
             funpayBotToggle.checked = data.is_bot_enabled;
         } catch (error) {
-            alert('Не удалось загрузить статус бота.');
+            /* Ошибка уже показана */
         }
     }
+
+    // ### НОВЫЕ ФУНКЦИИ ###
+    async function fetchLotsStatus() {
+        if (!funpayLotsToggle) return;
+        try {
+            const data = await fetchData(`${API_BASE_URL}/api/settings/lots_status`);
+            funpayLotsToggle.checked = data.are_lots_enabled;
+        } catch (error) {
+            /* Ошибка уже показана */
+        }
+    }
+
+    async function setLotsStatus(isEnabled) {
+        try {
+            const result = await fetchData(`${API_BASE_URL}/api/settings/lots_status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ are_lots_enabled: isEnabled })
+            });
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
+        } catch (error) {
+            funpayLotsToggle.checked = !isEnabled;
+        }
+    }
+    // ### КОНЕЦ НОВЫХ ФУНКЦИЙ ###
 
     async function setBotStatus(isEnabled) {
         try {
@@ -193,14 +239,8 @@ function mainApp() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_bot_enabled: isEnabled })
             });
-            // Показываем всплывающее уведомление Telegram
-            window.Telegram.WebApp.showPopup({
-                title: 'Успех',
-                message: result.message,
-                buttons: [{type: 'ok'}]
-            });
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
         } catch (error) {
-            // В случае ошибки, возвращаем переключатель в исходное состояние
             funpayBotToggle.checked = !isEnabled;
         }
     }
@@ -212,13 +252,15 @@ function mainApp() {
         if (!rentalId) return;
 
         if (target.classList.contains('finish-btn')) {
-            if (confirm(`Вы уверены, что хотите завершить аренду #${rentalId}?`)) {
-                try {
-                    const result = await fetchData(`${API_BASE_URL}/api/rentals/${rentalId}/finish`, { method: 'POST' });
-                    alert(result.message);
-                    fetchRentals('active');
-                } catch (error) { /* Ошибка уже показана */ }
-            }
+            window.Telegram.WebApp.showConfirm(`Вы уверены, что хотите завершить аренду #${rentalId}?`, async (isConfirmed) => {
+                if (isConfirmed) {
+                    try {
+                        const result = await fetchData(`${API_BASE_URL}/api/rentals/${rentalId}/finish`, { method: 'POST' });
+                        window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
+                        fetchRentals('active');
+                    } catch (error) { /* Ошибка уже показана */ }
+                }
+            });
         }
 
         if (target.classList.contains('extend-btn')) {
@@ -235,7 +277,7 @@ function mainApp() {
     if (confirmExtendBtn) confirmExtendBtn.addEventListener('click', async () => {
         const minutes = extendMinutesInput.value;
         if (!minutes || minutes < 1) {
-            alert('Введите корректное количество минут.');
+            window.Telegram.WebApp.showAlert('Введите корректное количество минут.');
             return;
         }
         try {
@@ -244,7 +286,7 @@ function mainApp() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ minutes: minutes })
             });
-            alert(result.message);
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
             if (extendModal) extendModal.style.display = 'none';
             fetchRentals('active');
         } catch (error) { /* Ошибка уже показана */ }
@@ -261,7 +303,7 @@ function mainApp() {
             const result = await fetchData(`${API_BASE_URL}/api/rentals/create`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rentalData)
             });
-            alert(result.message || 'Успешно!');
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
             manualRentalForm.reset();
             if (showActiveRentalsBtn) showActiveRentalsBtn.click();
         } catch(error) { /* Ошибка уже показана */ }
@@ -274,7 +316,7 @@ function mainApp() {
             const result = await fetchData(`${API_BASE_URL}/api/games/add`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game_name: gameName })
             });
-            alert(result.message);
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
             addGameForm.reset();
             populateGameSelects();
         } catch(error) { /* ... */ }
@@ -291,7 +333,7 @@ function mainApp() {
             const result = await fetchData(`${API_BASE_URL}/api/accounts/add`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(accountData)
             });
-            alert(result.message);
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
             addAccountForm.reset();
         } catch(error) { /* ... */ }
     });
@@ -315,14 +357,35 @@ function mainApp() {
 
     if (saveOffersBtn) saveOffersBtn.addEventListener('click', async () => {
         const gameId = editOffersGameSelect.value;
-        if (!gameId) { alert('Сначала выберите игру.'); return; }
+        if (!gameId) { window.Telegram.WebApp.showAlert('Сначала выберите игру.'); return; }
         try {
             const result = await fetchData(`${API_BASE_URL}/api/games/offers/update`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game_id: gameId, offers: gameOffersTextarea.value })
             });
-            alert(result.message);
+            window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
         } catch(error) { /* ... */ }
     });
+
+    // ### НОВЫЕ ОБРАБОТЧИКИ ###
+    if (funpayLotsToggle) {
+        funpayLotsToggle.addEventListener('change', (event) => {
+            setLotsStatus(event.target.checked);
+        });
+    }
+
+    if (forceDeactivateBtn) {
+        forceDeactivateBtn.addEventListener('click', () => {
+            window.Telegram.WebApp.showConfirm('Вы уверены, что хотите принудительно деактивировать ВСЕ лоты?', async (isConfirmed) => {
+                if(isConfirmed) {
+                    try {
+                        const result = await fetchData(`${API_BASE_URL}/api/settings/force_deactivate`, { method: 'POST' });
+                        window.Telegram.WebApp.showPopup({title: 'Успех', message: result.message, buttons: [{type: 'ok'}]});
+                    } catch(error) { /* Ошибка уже показана */ }
+                }
+            });
+        });
+    }
+    // ### КОНЕЦ НОВЫХ ОБРАБОТЧИКОВ ###
 
     // --- Инициализация при запуске ---
     if (showActiveRentalsBtn) showActiveRentalsBtn.click();

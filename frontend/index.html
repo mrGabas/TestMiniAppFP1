@@ -21,15 +21,12 @@
             <button id="show-management-btn">Управление</button>
             <button id="show-settings-btn">Настройки</button>
         </div>
-        </div>
 
-        <!-- Контейнер для активных аренд и истории -->
         <div id="rentals-list-container" class="data-container">
             <h2 id="rentals-title"></h2>
             <div id="rentals-list" class="list"></div>
         </div>
 
-        <!-- Контейнер для ручной аренды -->
         <div id="manual-rental-container" class="data-container" style="display: none;">
             <h2>Создать аренду вручную</h2>
             <form id="manual-rental-form">
@@ -51,7 +48,6 @@
             </form>
         </div>
 
-        <!-- Контейнер для управления -->
         <div id="management-container" class="data-container" style="display: none;">
             <h2>Управление</h2>
             <div class="management-section">
@@ -61,22 +57,7 @@
                     <button type="submit">Добавить игру</button>
                 </form>
             </div>
-        </div>
 
-        <div id="settings-container" class="data-container" style="display: none;">
-            <h2>Настройки</h2>
-            <div class="management-section">
-                <h3>Управление ботом</h3>
-                <div class="setting-item">
-                    <span class="setting-label">FunPay бот (обработка заказов)</span>
-                    <label class="switch">
-                        <input type="checkbox" id="funpay-bot-toggle">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-            </div>
-        </div>
-    </div>
             <div class="management-section">
                 <h3>Добавить новый аккаунт</h3>
                 <form id="add-account-form">
@@ -93,8 +74,36 @@
                 <button id="save-offers-btn">Сохранить лоты</button>
             </div>
         </div>
+
+        <div id="settings-container" class="data-container" style="display: none;">
+            <h2>Настройки</h2>
+            <div class="management-section">
+                <h3>Управление ботом</h3>
+                <div class="setting-item">
+                    <span class="setting-label">FunPay бот (обработка заказов)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="funpay-bot-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="management-section">
+                <h3>Управление лотами</h3>
+                <div class="setting-item">
+                    <span class="setting-label">Авто-активация лотов</span>
+                    <label class="switch">
+                        <input type="checkbox" id="funpay-lots-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span class="setting-label">Экстренная остановка</span>
+                     <button id="force-deactivate-btn" class="danger-btn">Принудительно отключить все лоты</button>
+                </div>
+            </div>
+            </div>
     </div>
-<!-- НОВОЕ: Модальное окно для продления аренды (изначально скрыто) -->
+
     <div id="extend-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>Продлить аренду</h3>
