@@ -4,12 +4,12 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
 import pytz
-
 # Добавляем корневую директорию
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-sys.path.append(project_root)
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
 
+import state_manager
 # Импортируем все необходимые функции
 from database import db_query
 from db_handler import (
@@ -159,6 +159,31 @@ def api_update_game_offers():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/settings/bot_status', methods=['GET'])
+def api_get_bot_status():
+    """Возвращает текущий статус работы FunPay бота."""
+    try:
+        return jsonify({"success": True, "is_bot_enabled": state_manager.is_bot_enabled})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/settings/bot_status', methods=['POST'])
+def api_set_bot_status():
+    """Включает или выключает FunPay бота."""
+    data = request.get_json()
+    if 'is_bot_enabled' not in data or not isinstance(data['is_bot_enabled'], bool):
+        return jsonify({"success": False, "error": "Неверный формат запроса. Ожидается 'is_bot_enabled': true/false."}), 400
+
+    try:
+        new_status = data['is_bot_enabled']
+        state_manager.is_bot_enabled = new_status
+        action = "включен" if new_status else "выключен"
+        return jsonify({"success": True, "message": f"Бот FunPay успешно {action}."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 if __name__ == '__main__':
     try:
         initialize_and_update_db()
@@ -168,4 +193,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Запуск Flask-сервера на http://127.0.0.1:5000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Убедитесь, что вы используете use_reloader=False, чтобы избежать двойного запуска
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

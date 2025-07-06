@@ -73,7 +73,6 @@ def sync_games_with_funpay_offers(account: Account):
     except Exception as e:
         logging.exception(f"[SYNC] Ошибка во время синхронизации игр с лотами.")
 
-
 def update_offer_status_for_game(account: Account, game_id: int):
     """Обновляет статус лотов для игры, учитывая глобальные переключатели."""
     if not game_id: return
@@ -210,6 +209,7 @@ def expired_rentals_checker(account: Account):
         except Exception as e:
             logging.exception(f"Ошибка в процессе фоновой синхронизации статусов.")
         time.sleep(60)
+
 def funpay_bot_listener(account, update_queue):
     """Основной обработчик событий FunPay."""
     runner = Runner(account)

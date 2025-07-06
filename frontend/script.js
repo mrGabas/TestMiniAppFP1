@@ -23,6 +23,9 @@ function mainApp() {
     const showHistoryRentalsBtn = document.getElementById('show-history-rentals-btn');
     const showManualRentalBtn = document.getElementById('show-manual-rental-btn');
     const showManagementBtn = document.getElementById('show-management-btn');
+    const showSettingsBtn = document.getElementById('show-settings-btn');
+    const settingsContainer = document.getElementById('settings-container');
+    const funpayBotToggle = document.getElementById('funpay-bot-toggle');
 
     const rentalsContainer = document.getElementById('rentals-list-container');
     const manualRentalContainer = document.getElementById('manual-rental-container');
@@ -50,7 +53,7 @@ function mainApp() {
     if (statusDiv) statusDiv.textContent = 'Подключение успешно!';
 
     function showScreen(screenToShow) {
-        [rentalsContainer, manualRentalContainer, managementContainer].forEach(screen => {
+        [rentalsContainer, manualRentalContainer, managementContainer, settingsContainer].forEach(screen => {
             if (screen) screen.style.display = 'none';
         });
         if (screenToShow) screenToShow.style.display = 'block';
@@ -77,6 +80,17 @@ function mainApp() {
     showManagementBtn.addEventListener('click', () => {
         showScreen(managementContainer);
         populateGameSelects();
+    });
+
+    showManagementBtn.addEventListener('click', () => {
+        showScreen(managementContainer);
+        populateGameSelects();
+    });
+
+    // --- НОВЫЙ ОБРАБОТЧИК ---
+    showSettingsBtn.addEventListener('click', () => {
+        showScreen(settingsContainer);
+        fetchBotStatus();
     });
 
     // --- УЛУЧШЕННЫЕ ФУНКЦИИ ЗАГРУЗКИ ДАННЫХ ---
@@ -160,6 +174,35 @@ function mainApp() {
                 });
             }
         } catch (error) { /* Ошибка уже показана */ }
+    }
+
+    async function fetchBotStatus() {
+        if (!funpayBotToggle) return;
+        try {
+            const data = await fetchData(`${API_BASE_URL}/api/settings/bot_status`);
+            funpayBotToggle.checked = data.is_bot_enabled;
+        } catch (error) {
+            alert('Не удалось загрузить статус бота.');
+        }
+    }
+
+    async function setBotStatus(isEnabled) {
+        try {
+            const result = await fetchData(`${API_BASE_URL}/api/settings/bot_status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_bot_enabled: isEnabled })
+            });
+            // Показываем всплывающее уведомление Telegram
+            window.Telegram.WebApp.showPopup({
+                title: 'Успех',
+                message: result.message,
+                buttons: [{type: 'ok'}]
+            });
+        } catch (error) {
+            // В случае ошибки, возвращаем переключатель в исходное состояние
+            funpayBotToggle.checked = !isEnabled;
+        }
     }
 
     // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
@@ -262,6 +305,13 @@ function mainApp() {
             if (gameOffersTextarea) gameOffersTextarea.value = result.offers;
         } catch(error) { /* ... */ }
     });
+
+    if (funpayBotToggle) {
+        funpayBotToggle.addEventListener('change', (event) => {
+            const isEnabled = event.target.checked;
+            setBotStatus(isEnabled);
+        });
+    }
 
     if (saveOffersBtn) saveOffersBtn.addEventListener('click', async () => {
         const gameId = editOffersGameSelect.value;

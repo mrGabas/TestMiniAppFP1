@@ -19,6 +19,8 @@
             <button id="show-history-rentals-btn">История</button>
             <button id="show-manual-rental-btn">Ручная аренда</button>
             <button id="show-management-btn">Управление</button>
+            <button id="show-settings-btn">Настройки</button>
+        </div>
         </div>
 
         <!-- Контейнер для активных аренд и истории -->
@@ -59,6 +61,22 @@
                     <button type="submit">Добавить игру</button>
                 </form>
             </div>
+        </div>
+
+        <div id="settings-container" class="data-container" style="display: none;">
+            <h2>Настройки</h2>
+            <div class="management-section">
+                <h3>Управление ботом</h3>
+                <div class="setting-item">
+                    <span class="setting-label">FunPay бот (обработка заказов)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="funpay-bot-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
             <div class="management-section">
                 <h3>Добавить новый аккаунт</h3>
                 <form id="add-account-form">

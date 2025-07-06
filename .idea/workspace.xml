@@ -4,12 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="363783dd-bb7d-46d5-9002-e413884b51a9" name="Changes" comment="v 6">
+    <list default="true" id="363783dd-bb7d-46d5-9002-e413884b51a9" name="Changes" comment="v 7">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/web_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/web_server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bot_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/bot_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/script.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/script.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/style.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/style.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/rentals.db" beforeDir="false" afterPath="$PROJECT_DIR$/rentals.db" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_bot.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/telegram_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/telegram_bot.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -237,7 +239,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751748199975</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="v 7">
+      <option name="closed" value="true" />
+      <created>1751759564697</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1751759564697</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -262,6 +272,7 @@
     <MESSAGE value="v 4" />
     <MESSAGE value="v 5" />
     <MESSAGE value="v 6" />
-    <option name="LAST_COMMIT_MESSAGE" value="v 6" />
+    <MESSAGE value="v 7" />
+    <option name="LAST_COMMIT_MESSAGE" value="v 7" />
   </component>
 </project>
